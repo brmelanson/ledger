@@ -17708,10 +17708,21 @@ function mergeRecipes(stored) {
     const byKey = new Map(stored.map((r) => [r.key, r]));
     const merged = DEFAULT_RECIPES.map((base) => {
         const u = byKey.get(base.key);
+        if (!u)
+            return base;
         // A blank stored outcome falls back to the app-authored note rather than
         // shadowing it, so clearing the box resets to the original note instead of
-        // leaving the card silent.
-        return u ? { ...base, outcome: (u.outcome || "").trim() ? u.outcome : base.outcome, lastMade: u.lastMade ?? null } : base;
+        // leaving the card silent. Everything the cook records — verdicts most of
+        // all, since the chef reads them — has to survive the merge, or a "never
+        // again" quietly reverts the next time the app opens.
+        return {
+            ...base,
+            outcome: (u.outcome || "").trim() ? u.outcome : base.outcome,
+            lastMade: u.lastMade ?? null,
+            verdict: u.verdict ?? null,
+            verdictNote: u.verdictNote || "",
+            cuisine: u.cuisine || base.cuisine || "",
+        };
     });
     const baseKeys = new Set(DEFAULT_RECIPES.map((r) => r.key));
     stored.forEach((r) => { if (!baseKeys.has(r.key))
@@ -18286,17 +18297,66 @@ function recipeForWeek(mealPlan, dateStr) {
     const hit = (mealPlan || []).find((m) => m.weekStart === wk);
     return hit ? hit.recipeKey : null;
 }
+// The list gets read while walking a store, so it is grouped the way the store
+// is laid out and names things the way the shelf tag does. Older recipes stored
+// a flat fresh/pantry split; those still render, just under two headings.
+const STORE_SECTIONS = [
+    ["produce", "PRODUCE"],
+    ["meatSeafood", "MEAT & SEAFOOD"],
+    ["deli", "DELI & PREPARED"],
+    ["dairy", "DAIRY & EGGS"],
+    ["bakery", "BAKERY"],
+    ["cannedJarred", "CANNED & JARRED"],
+    ["dryGoods", "DRY GOODS & GRAINS"],
+    ["spices", "SPICES & OILS"],
+    ["frozen", "FROZEN"],
+    ["other", "OTHER"],
+];
+// The chef sometimes returns departments as empty arrays or arrays holding a
+// single blank string; both would render as an empty heading on the list.
+function normalizeGrocery(g) {
+    const src = g || {};
+    const out = {};
+    STORE_SECTIONS.forEach(([k]) => {
+        const items = Array.isArray(src[k]) ? src[k].map((s) => String(s).trim()).filter(Boolean) : [];
+        if (items.length)
+            out[k] = items;
+    });
+    ["fresh", "pantry"].forEach((k) => {
+        const items = Array.isArray(src[k]) ? src[k].map((s) => String(s).trim()).filter(Boolean) : [];
+        if (items.length)
+            out[k] = items;
+    });
+    if (src.notes && String(src.notes).trim())
+        out.notes = String(src.notes).trim();
+    return out;
+}
 function buildGroceryList(recipe) {
+    const g = normalizeGrocery(recipe.grocery);
     const line = (x) => "- " + x;
-    return [
-        recipe.name,
-        "",
-        "FRESH",
-        ...recipe.grocery.fresh.map(line),
-        "",
-        "PANTRY",
-        ...recipe.grocery.pantry.map(line),
-    ].join("\n");
+    const out = [recipe.name];
+    if (recipe.servings)
+        out.push(`${recipe.servings} serving${recipe.servings === 1 ? "" : "s"}`);
+    out.push("");
+    const sectioned = STORE_SECTIONS.filter(([k]) => Array.isArray(g[k]) && g[k].length);
+    if (sectioned.length) {
+        sectioned.forEach(([k, label]) => {
+            out.push(label, ...g[k].map(line), "");
+        });
+    }
+    else {
+        if ((g.fresh || []).length)
+            out.push("FRESH", ...g.fresh.map(line), "");
+        if ((g.pantry || []).length)
+            out.push("PANTRY", ...g.pantry.map(line), "");
+    }
+    if (g.notes)
+        out.push("NOTES", g.notes);
+    return out.join("\n").trim();
+}
+function hasGrocery(recipe) {
+    const g = normalizeGrocery(recipe.grocery);
+    return Object.keys(g).some((k) => k !== "notes");
 }
 // ---------- session time budget ----------
 // A program can only grow until it stops fitting in the time available.
@@ -19482,11 +19542,17 @@ NON-NEGOTIABLE CONSTRAINTS — this kitchen has taught these the hard way:
 - Canned fish did NOT land here. The texture is the problem, not the seasoning. Do not build a dish around canned salmon or canned tuna unless explicitly asked for it.
 - Rotisserie chicken is a legitimate and preferred shortcut for any chicken recipe.
 - Equipment available: Zojirushi rice cooker, foil-lined sheet pans, standard pots and pans, no sous vide or specialty gear.
-- Groceries come from Market Basket. Give EXACT can and package sizes (e.g. "1 x 15.5 oz can chickpeas", "1 x 16 oz box pearl couscous").
+- SHOPPING happens in western Massachusetts, near Leverett — Big Y, Market Basket, and sometimes Food City. These are ordinary New England supermarkets, not specialty grocers. Do not call for anything that would need a trip to an Asian market, a Middle Eastern grocer, or a co-op. If a dish really wants such an ingredient, name the supermarket substitute instead and say what was swapped.
 
 NUTRITION TARGET: this person lifts three times a week and wants 25-40g of protein per serving. Hit that range. Estimate protein and fiber per serving honestly.
 
-Every recipe must include a TECHNIQUE note: the one piece of craft that makes this dish better than the obvious version of itself, explained in a way that teaches something.`;
+Every recipe must include a TECHNIQUE note: the one piece of craft that makes this dish better than the obvious version of itself, explained in a way that teaches something.
+
+TWO SEPARATE LISTS ARE REQUIRED, and they are not the same list:
+
+1. "ingredients" — what the recipe uses, in cooking quantities, in the order they are used. Every single thing the method touches appears here, including salt, oil and water. Write them the way a recipe writes them: "2 lbs boneless chicken thighs", "1.5 tsp ground cumin", "3 tbsp extra virgin olive oil". Do not write package sizes here.
+
+2. "grocery" — what to put in the cart, sorted into supermarket departments, named EXACTLY as the shelf tag or sign reads at Big Y or Market Basket so it can be found without hunting. Give exact package and can sizes and the number to buy: "3 x 15.5 oz cans Goya chickpeas", "1 x 5 oz bag baby arugula", "2 lbs boneless skinless chicken thighs (family pack)". Say the department name the store actually uses. Leave a department out entirely if nothing is bought there — do not include empty arrays with blank strings. Omit staples that any kitchen already has ONLY if they are truly universal (salt, black pepper, olive oil); if a spice is at all specific, buy it. Use "notes" for anything worth knowing at the store: which chain is likelier to carry something, a decent substitute if it is missing, or where in the store an odd item hides.`;
 const SCOPE_PREP = `SCOPE: a week of make-ahead lunches. Five servings per batch, stored BY COMPONENT in bins (not portioned containers). Sauces always stored separately and added at lunch. Everything must still be good on day five. Set "scope" to "prep" and "servings" to 5.`;
 const SCOPE_MEAL = `SCOPE: one meal, cooked and eaten the same day. This is NOT meal prep — do not optimise for five-day storage, do not store by component, and feel free to use delicate ingredients that would never survive a week. Cook one generous serving. Keep it under 45 minutes. Set "scope" to "meal" and "servings" to 1.`;
 const ANGLES = {
@@ -19495,8 +19561,8 @@ const ANGLES = {
     fast: `ANGLE: minimum effort. Shortcuts are welcome — rotisserie chicken, pre-cut vegetables, jarred staples. Keep active time low and say the honest number. It should still taste like someone cooked it.`,
     proven: `ANGLE: something reliable. Lean on techniques and flavour profiles that have already worked in this kitchen (see the history below). Comfort over novelty this time.`,
 };
-const CHEF_JSON = `Respond with ONLY a JSON object, no markdown fence, no preamble:
-{"name":"","scope":"prep","servings":5,"cuisine":"","protein":"","grain":"","veg":"","sauce":"","proteinG":0,"fiberG":0,"activeMinutes":0,"prepNotes":"","technique":"","method":[{"t":"step title","d":"step detail"}],"grocery":{"fresh":[""],"pantry":[""]}}`;
+const CHEF_JSON = `Respond with ONLY a JSON object, no markdown fence, no preamble. Omit any grocery department where nothing is bought:
+{"name":"","scope":"prep","servings":5,"cuisine":"","protein":"","grain":"","veg":"","sauce":"","proteinG":0,"fiberG":0,"activeMinutes":0,"prepNotes":"","technique":"","ingredients":["2 lbs boneless chicken thighs","1.5 tsp ground cumin"],"method":[{"t":"step title","d":"step detail"}],"grocery":{"produce":["1 x 5 oz bag baby arugula"],"meatSeafood":[],"deli":[],"dairy":[],"bakery":[],"cannedJarred":[],"dryGoods":[],"spices":[],"frozen":[],"other":[],"notes":""}}`;
 // A verdict is only worth recording if it changes what gets cooked next, so
 // every rejection and every win is folded back into the prompt as a rule.
 function kitchenHistory(recipes) {
@@ -19566,14 +19632,80 @@ const ANGLE_LABELS = [
     { key: "fast", label: "Fast & easy", hint: "shortcuts welcome" },
     { key: "proven", label: "Something reliable", hint: "leans on what has worked" },
 ];
+// A generated recipe costs an API call and several minutes of reading, and it
+// used to live only in component state — so backgrounding the app on a phone,
+// which Android will happily do, threw it away. It now hits storage the moment
+// it arrives and is only cleared once it has been saved or explicitly discarded.
+const CHEF_DRAFT_KEY = "chef-draft";
+function loadChefDraft() {
+    try {
+        const raw = lsGet(CHEF_DRAFT_KEY);
+        if (!raw)
+            return null;
+        const parsed = JSON.parse(raw.value);
+        return parsed && parsed.draft ? parsed : null;
+    }
+    catch (e) {
+        return null;
+    }
+}
+// Selecting text in a textarea on Android is fiddly enough that the list was
+// effectively read-only. A real copy button is the whole point of the feature.
+function GroceryList({ recipe }) {
+    const [copied, setCopied] = (0, react_1.useState)(false);
+    const text = buildGroceryList(recipe);
+    const copy = async () => {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+            }
+            else {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+            }
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+        catch (e) {
+            setCopied(false);
+        }
+    };
+    return (react_1.default.createElement("div", null,
+        react_1.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6E6E", flex: 1 } }, "Big Y \u00B7 Market Basket \u00B7 Food City"),
+            react_1.default.createElement("button", { onClick: copy, style: {
+                    ...btnPrimary, padding: "8px 14px", fontSize: 12,
+                    background: copied ? "#0043FF" : "#111111",
+                } }, copied ? "Copied" : "Copy list")),
+        react_1.default.createElement("textarea", { readOnly: true, onClick: (e) => e.target.select(), value: text, style: {
+                width: "100%", minHeight: 260, border: "2px solid #111111", padding: 12,
+                fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, lineHeight: 1.6,
+                background: "#F0F0ED", color: "#111111", resize: "vertical",
+            } })));
+}
 function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
-    const [request, setRequest] = (0, react_1.useState)("");
-    const [scope, setScope] = (0, react_1.useState)("prep");
-    const [angle, setAngle] = (0, react_1.useState)("new");
+    const stashed = loadChefDraft();
+    const [request, setRequest] = (0, react_1.useState)((stashed && stashed.request) || "");
+    const [scope, setScope] = (0, react_1.useState)((stashed && stashed.scope) || "prep");
+    const [angle, setAngle] = (0, react_1.useState)((stashed && stashed.angle) || "new");
     const [busy, setBusy] = (0, react_1.useState)(false);
     const [error, setError] = (0, react_1.useState)(null);
-    const [draft, setDraft] = (0, react_1.useState)(null);
+    const [draft, setDraft] = (0, react_1.useState)((stashed && stashed.draft) || null);
+    const [restored, setRestored] = (0, react_1.useState)(!!stashed);
+    const [showList, setShowList] = (0, react_1.useState)(false);
     const boxRef = react_1.default.useRef(null);
+    const stash = (d, req, sc, an) => {
+        if (d)
+            lsSet(CHEF_DRAFT_KEY, JSON.stringify({ draft: d, request: req, scope: sc, angle: an }));
+        else
+            lsRemove(CHEF_DRAFT_KEY);
+    };
     // A failed batch hands the chef the context directly, so the replacement
     // request never has to be retyped from scratch. On a phone the panel is
     // below the fold, so it comes to you rather than the other way round.
@@ -19586,7 +19718,9 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
         if (seed.angle)
             setAngle(seed.angle);
         setDraft(null);
+        setRestored(false);
         setError(null);
+        stash(null);
         if (boxRef.current && boxRef.current.scrollIntoView) {
             boxRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
         }
@@ -19602,11 +19736,15 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
         setBusy(true);
         setError(null);
         setDraft(null);
+        setRestored(false);
+        setShowList(false);
         try {
             const ask = body || (scope === "meal"
                 ? "Cook me one really good dinner tonight. Your call on what."
                 : "Build me this week's prep. Your call on what.");
-            setDraft(await askChef(ask, buildChefSystem(recipes, scope, angle)));
+            const result = await askChef(ask, buildChefSystem(recipes, scope, angle));
+            setDraft(result);
+            stash(result, body, scope, angle);
         }
         catch (e) {
             setError(e.message === "no-key"
@@ -19644,6 +19782,7 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
             react_1.default.createElement("button", { onClick: run, disabled: busy, style: { ...btnPrimary, opacity: busy ? 0.6 : 1, justifyContent: "center" } }, busy ? "Thinking…" : scope === "meal" ? "Build me a meal" : "Build me a prep"),
             error && (react_1.default.createElement("div", { style: { border: "2px solid #E8112D", background: "#FFEFF0", padding: 12, fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#111111", lineHeight: 1.6 } }, error)),
             draft && (react_1.default.createElement("div", { style: { borderTop: "2px solid #111111", paddingTop: 14, display: "flex", flexDirection: "column", gap: 12 } },
+                react_1.default.createElement("div", { style: { background: restored ? "#FFC400" : "#F0F0ED", border: "2px solid #111111", padding: "8px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "#111111" } }, restored ? "Recovered — still not saved" : "Not saved yet"),
                 react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 18, fontWeight: 800, letterSpacing: -0.4, color: "#111111", lineHeight: 1.15 } }, draft.name),
                 react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 } },
                     react_1.default.createElement("span", { style: { background: "#0043FF", color: "#FFFFFF", padding: "2px 6px" } },
@@ -19657,15 +19796,22 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
                     react_1.default.createElement("strong", null, "Technique:"),
                     " ",
                     draft.technique)),
+                (draft.ingredients || []).length > 0 && (react_1.default.createElement("div", null,
+                    react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#6E6E6E", letterSpacing: 1, textTransform: "uppercase", marginBottom: 6 } }, "Ingredients"),
+                    draft.ingredients.map((ing, i) => (react_1.default.createElement("div", { key: i, style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#111111", lineHeight: 1.7, borderBottom: "1px solid #EDEDED", padding: "3px 0" } }, ing))))),
                 (draft.method || []).map((m, i) => (react_1.default.createElement("div", { key: i, style: { borderTop: "1px solid #DEDEDE", paddingTop: 8 } },
                     react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#6E6E6E", letterSpacing: 1, textTransform: "uppercase" } },
                         "Step ",
                         i + 1),
                     react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600, color: "#111111", marginTop: 2 } }, m.t),
                     react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#111111", lineHeight: 1.6, marginTop: 2 } }, m.d)))),
+                hasGrocery(draft) && (react_1.default.createElement(react_1.default.Fragment, null,
+                    react_1.default.createElement("button", { onClick: () => setShowList(!showList), style: { ...btnGhost, justifyContent: "center", fontSize: 12.5, padding: "10px 14px" } }, showList ? "Hide shopping list" : "Shopping list"),
+                    showList && react_1.default.createElement(GroceryList, { recipe: draft }))),
                 react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
-                    react_1.default.createElement("button", { onClick: () => { onSave(draft, scope); setDraft(null); setRequest(""); }, style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Save it"),
-                    react_1.default.createElement("button", { onClick: run, disabled: busy, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Try again")))))));
+                    react_1.default.createElement("button", { onClick: () => { onSave(draft, scope); setDraft(null); setRestored(false); setRequest(""); setShowList(false); stash(null); }, style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Save to rotation"),
+                    react_1.default.createElement("button", { onClick: run, disabled: busy, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Retry"),
+                    react_1.default.createElement("button", { onClick: () => { setDraft(null); setRestored(false); setShowList(false); stash(null); }, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Discard")))))));
 }
 // ---------- kitchen tab ----------
 // A day is not a checkbox. The prep gets eaten, or something else does, or
@@ -19685,6 +19831,8 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
     const [failNote, setFailNote] = (0, react_1.useState)("");
     const [seed, setSeed] = (0, react_1.useState)(null);
     const [filter, setFilter] = (0, react_1.useState)("all");
+    const [saveWarning, setSaveWarning] = (0, react_1.useState)(null);
+    const [confirmDelete, setConfirmDelete] = (0, react_1.useState)(null);
     const today = localDateStr();
     const thisWeek = prepWeekOf(today);
     const currentKey = recipeForWeek(mealPlan, today);
@@ -19720,11 +19868,9 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
                 activeMinutes: Number(draft.activeMinutes) || 0,
                 prepNotes: draft.prepNotes || "",
                 technique: draft.technique || "",
+                ingredients: Array.isArray(draft.ingredients) ? draft.ingredients.filter(Boolean) : [],
                 method: Array.isArray(draft.method) ? draft.method : [],
-                grocery: {
-                    fresh: draft.grocery?.fresh || [],
-                    pantry: draft.grocery?.pantry || [],
-                },
+                grocery: normalizeGrocery(draft.grocery),
                 generated: true,
                 outcome: "",
                 verdict: null,
@@ -19732,6 +19878,25 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
                 lastMade: null,
             }]);
         setOpenKey(key);
+        // Storage can refuse a write — a full quota is the usual reason — and it
+        // does so silently, which is how a recipe can sit in the list all evening
+        // and be gone in the morning. Read it back and say so if it didn't stick.
+        setTimeout(() => {
+            try {
+                const raw = lsGet("recipes-config");
+                const ok = raw && JSON.parse(raw.value).some((r) => r.key === key);
+                setSaveWarning(ok ? null : "That recipe is showing here but did not write to storage, so it will not survive a restart. Your phone's storage for this app is probably full — export from the Plan tab, then tell me.");
+            }
+            catch (e) {
+                setSaveWarning("Could not confirm that recipe saved. Export from the Plan tab before closing the app.");
+            }
+        }, 60);
+    };
+    const deleteRecipe = (key) => {
+        setRecipes((prev) => prev.filter((r) => r.key !== key));
+        setMealPlan((prev) => (prev || []).filter((m) => m.recipeKey !== key));
+        setOpenKey(null);
+        setConfirmDelete(null);
     };
     // One tap moves a day forward through the cycle. Nothing here should ever
     // take more than a tap, or it won't get logged at all.
@@ -19786,6 +19951,10 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
     const techniques = cooked.filter((r) => r.technique).length;
     const shown = recipes.filter((r) => filter === "all" || (filter === "meal" ? r.scope === "meal" : r.scope !== "meal"));
     return (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16 } },
+        saveWarning && (react_1.default.createElement("div", { style: { border: "3px solid #E8112D", background: "#FFEFF0", padding: 14 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, fontWeight: 600, letterSpacing: 1.4, textTransform: "uppercase", color: "#E8112D", marginBottom: 6 } }, "Not saved"),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#111111", lineHeight: 1.6 } }, saveWarning),
+            react_1.default.createElement("button", { onClick: () => setSaveWarning(null), style: { ...btnGhost, marginTop: 10, padding: "8px 14px", fontSize: 12 } }, "Dismiss"))),
         react_1.default.createElement("div", { style: { background: "#111111", color: "#FFFFFF", padding: 22 } },
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1.4, textTransform: "uppercase", opacity: 0.65 } }, "This week"),
             current ? (react_1.default.createElement(react_1.default.Fragment, null,
@@ -19912,6 +20081,11 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
                         react_1.default.createElement("strong", null, "Technique:"),
                         " ",
                         r.technique)),
+                    (r.ingredients || []).length > 0 && (react_1.default.createElement("div", null,
+                        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6E6E", marginBottom: 6 } },
+                            "Ingredients",
+                            r.servings ? ` · ${r.servings} serving${r.servings === 1 ? "" : "s"}` : ""),
+                        r.ingredients.map((ing, i) => (react_1.default.createElement("div", { key: i, style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#111111", lineHeight: 1.7, borderBottom: "1px solid #EDEDED", padding: "3px 0" } }, ing))))),
                     (r.method || []).length > 0 && (react_1.default.createElement("div", null,
                         react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6E6E", marginBottom: 8 } },
                             "Method",
@@ -19950,19 +20124,17 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
                     react_1.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
                         !isMeal && (react_1.default.createElement("button", { onClick: () => assignWeek(r.key), style: { ...btnPrimary, padding: "10px 14px", fontSize: 12.5 } }, "Cooking this week")),
                         react_1.default.createElement("button", { onClick: () => markMade(r.key), style: { ...btnGhost, padding: "10px 14px", fontSize: 12.5 } }, r.lastMade === today ? "Made today" : "Made it today"),
-                        react_1.default.createElement("button", { onClick: () => setShowList(showList === r.key ? null : r.key), style: { ...btnGhost, padding: "10px 14px", fontSize: 12.5 } }, showList === r.key ? "Hide list" : "Grocery list"),
+                        hasGrocery(r) && (react_1.default.createElement("button", { onClick: () => setShowList(showList === r.key ? null : r.key), style: { ...btnGhost, padding: "10px 14px", fontSize: 12.5 } }, showList === r.key ? "Hide list" : "Shopping list")),
                         react_1.default.createElement("button", { onClick: () => setSeed({
                                 scope: isMeal ? "meal" : "prep",
                                 angle: "new",
                                 text: `Something in the same spirit as "${r.name}" but genuinely different — a technique or cuisine I haven't cooked yet.`,
                             }), style: { ...btnGhost, padding: "10px 14px", fontSize: 12.5 } }, "Something like this, but new")),
-                    showList === r.key && (react_1.default.createElement("div", null,
-                        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6E6E", marginBottom: 6 } }, "Market Basket \u00B7 tap to select all"),
-                        react_1.default.createElement("textarea", { readOnly: true, onClick: (e) => e.target.select(), value: buildGroceryList(r), style: {
-                                width: "100%", minHeight: 230, border: "2px solid #111111", padding: 12,
-                                fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, lineHeight: 1.6,
-                                background: "#F0F0ED", color: "#111111", resize: "vertical",
-                            } })))))));
+                    r.generated && (confirmDelete === r.key ? (react_1.default.createElement("div", { style: { border: "2px solid #E8112D", background: "#FFEFF0", padding: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } },
+                        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#111111", flex: 1, lineHeight: 1.5 } }, "Delete this recipe for good?"),
+                        react_1.default.createElement("button", { onClick: () => deleteRecipe(r.key), style: { ...btnPrimary, background: "#E8112D", padding: "8px 14px", fontSize: 12 } }, "Delete"),
+                        react_1.default.createElement("button", { onClick: () => setConfirmDelete(null), style: { ...btnGhost, padding: "8px 14px", fontSize: 12 } }, "Keep"))) : (react_1.default.createElement("button", { onClick: () => setConfirmDelete(r.key), style: { ...btnGhost, padding: "8px 12px", fontSize: 11.5, color: "#6E6E6E", border: "2px solid #DEDEDE", alignSelf: "flex-start" } }, "Delete recipe"))),
+                    showList === r.key && react_1.default.createElement(GroceryList, { recipe: r })))));
         }),
         react_1.default.createElement("div", { style: { background: "#FFF6D6", border: "2px solid #111111", padding: 18 } },
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#111111", marginBottom: 10 } }, "Standing prep rules"),
