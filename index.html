@@ -19101,13 +19101,66 @@ function Sparkline({ data, width = 300, height = 60, color = "#0043FF" }) {
         data.map((v, i) => (react_1.default.createElement("circle", { key: i, cx: (i * stepX).toFixed(1), cy: toY(v).toFixed(1), r: "3", fill: color })))));
 }
 // ---------- practice (daily meditation + journal) ----------
+// ---------- how the mind was (non-ranked) ----------
+// Replaces the old restless -> absorbed scale, which ranked sits by depth of
+// absorption and so quietly made "absorbed" the goal. These two readings are
+// diagnostic instead of ordinal: there is no best answer to either. Energy is the
+// classical energy/concentration balance, which tells you which awakening factors
+// to lean on next time; attitude is the observing mind's own stance.
+const MIND_ENERGY = [
+    { key: "slack", short: "Slack", label: "Slack — dull, sinking, low energy" },
+    { key: "balanced", short: "Balanced", label: "Balanced — energy and steadiness met" },
+    { key: "agitated", short: "Agitated", label: "Agitated — restless, pushing, busy" },
+];
+const MIND_ATTITUDE = [
+    { key: "allowing", short: "Allowing", label: "Allowing — letting it be as it was" },
+    { key: "wanting", short: "Wanting", label: "Wanting — after a state, a depth, a result" },
+    { key: "resisting", short: "Resisting", label: "Resisting — pushing something away" },
+    { key: "unclear", short: "Unclear", label: "Hard to tell" },
+];
+// Entries logged before this change carry a `rating` from the old scale. They stay
+// exactly as they were and still render — nothing in the log is rewritten.
+function practiceReadout(p) {
+    const parts = [];
+    const t = MEDITATION_TYPES.find((x) => x.key === p.type);
+    if (t)
+        parts.push(t.label);
+    const e = MIND_ENERGY.find((x) => x.key === p.energy);
+    const a = MIND_ATTITUDE.find((x) => x.key === p.attitude);
+    if (e)
+        parts.push(e.short);
+    if (a)
+        parts.push(a.short);
+    if (!e && !a) {
+        const legacy = MEDITATION_RATINGS.find((x) => x.key === p.rating);
+        if (legacy)
+            parts.push(legacy.label);
+    }
+    return parts.join(" · ");
+}
+function MindStep({ entry, setEntry }) {
+    return (react_1.default.createElement(Card, { title: "How was the mind?", sub: "Two readings, neither one a score" },
+        react_1.default.createElement(Field, { label: "Energy" },
+            react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MIND_ENERGY.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.energy === r.key, onClick: () => setEntry((e) => ({ ...e, energy: r.key })) }, r.label))))),
+        react_1.default.createElement(Field, { label: "Attitude of the observing mind" },
+            react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MIND_ATTITUDE.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.attitude === r.key, onClick: () => setEntry((e) => ({ ...e, attitude: r.key })) }, r.label))))),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6, marginTop: 4 } }, "Slack asks for interest and energy next time; agitated asks for settling. Neither is a better sit.")));
+}
+function ReviewLine({ entry }) {
+    const e = MIND_ENERGY.find((x) => x.key === entry.energy);
+    const a = MIND_ATTITUDE.find((x) => x.key === entry.attitude);
+    return (react_1.default.createElement("div", null,
+        e ? e.short : "No energy noted",
+        " \u00B7 ",
+        a ? a.short : "No attitude noted"));
+}
 function PracticeWizard({ onCancel, onComplete }) {
     const [step, setStep] = (0, react_1.useState)(0);
     const [entry, setEntry] = (0, react_1.useState)({
         date: localDateStr(),
-        type: null, duration: 15, rating: null, journal: "",
+        type: null, duration: 15, energy: null, attitude: null, journal: "",
     });
-    const steps = ["type", "duration", "rating", "journal", "review"];
+    const steps = ["type", "duration", "mind", "journal", "review"];
     const total = steps.length;
     const current = steps[step];
     const next = () => setStep((s) => Math.min(total - 1, s + 1));
@@ -19130,8 +19183,7 @@ function PracticeWizard({ onCancel, onComplete }) {
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MEDITATION_TYPES.map((t) => (react_1.default.createElement(Chip, { key: t.key, active: entry.type === t.key, onClick: () => setEntry((e) => ({ ...e, type: t.key })) }, t.label)))))),
         current === "duration" && (react_1.default.createElement(Card, { title: "Duration", sub: "How long did you sit?" },
             react_1.default.createElement(Stepper, { value: entry.duration, step: 5, unit: "min", min: 1, onChange: (v) => setEntry((e) => ({ ...e, duration: v })) }))),
-        current === "rating" && (react_1.default.createElement(Card, { title: "How did it feel?", sub: "A read on how settled the mind was \u2014 no wrong answer" },
-            react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MEDITATION_RATINGS.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.rating === r.key, onClick: () => setEntry((e) => ({ ...e, rating: r.key })) }, r.label)))))),
+        current === "mind" && (react_1.default.createElement(MindStep, { entry: entry, setEntry: setEntry })),
         current === "journal" && (react_1.default.createElement(Card, { title: "Journal", sub: "Optional \u2014 whatever's worth writing down" },
             react_1.default.createElement(PointerPrompt, { type: entry.type }),
             react_1.default.createElement("textarea", { value: entry.journal, onChange: (ev) => setEntry((e) => ({ ...e, journal: ev.target.value })), placeholder: "What came up, what you noticed, anything on your mind\u2026", style: {
@@ -19146,7 +19198,7 @@ function PracticeWizard({ onCancel, onComplete }) {
                     " \u00B7 ",
                     entry.duration,
                     " min"),
-                react_1.default.createElement("div", null, MEDITATION_RATINGS.find((r) => r.key === entry.rating)?.label || "No rating set"),
+                react_1.default.createElement(ReviewLine, { entry: entry }),
                 entry.journal && react_1.default.createElement("div", { style: { marginTop: 8, fontFamily: "'Inter', sans-serif", fontStyle: "italic" } },
                     "\"",
                     entry.journal.slice(0, 120),
@@ -19292,18 +19344,9 @@ function PointerPrompt({ type }) {
 function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
     const [editingId, setEditingId] = (0, react_1.useState)(null);
     const [confirmId, setConfirmId] = (0, react_1.useState)(null);
-    const streak = (0, react_1.useMemo)(() => {
-        if (practice.length === 0)
-            return 0;
-        const dates = new Set(practice.map((p) => p.date));
-        let count = 0;
-        let d = new Date();
-        while (dates.has(localDateStr(d))) {
-            count += 1;
-            d.setDate(d.getDate() - 1);
-        }
-        return count;
-    }, [practice]);
+    // Streak deliberately removed: counting consecutive days measures whether you sat,
+    // not what happened while sitting, and turns the log into a thing to protect.
+    const satToday = (0, react_1.useMemo)(() => practice.some((p) => p.date === localDateStr()), [practice]);
     // Sort by date rather than relying on insertion order — once a date is editable,
     // the order entries were logged in stops matching the order they happened in.
     // Ties fall back to id (which is Date.now()-based), so two sits on the same day
@@ -19316,7 +19359,7 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
     return (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16 } },
         react_1.default.createElement("div", { style: { background: "#1B1B1B", borderRadius: 0, padding: 24, color: "#F9F6EE", boxShadow: "6px 6px 0 #75695A" } },
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, opacity: 0.6, letterSpacing: 1, textTransform: "uppercase" } }, "Daily practice"),
-            react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 38, fontWeight: 800, letterSpacing: -1.4, textTransform: "uppercase", margin: "4px 0 14px" } }, streak > 0 ? `${streak} day streak` : "Log today's sit"),
+            react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 38, fontWeight: 800, letterSpacing: -1.4, textTransform: "uppercase", margin: "4px 0 14px" } }, satToday ? "Sat today" : "Log today's sit"),
             react_1.default.createElement("button", { onClick: onStartLog, style: { ...btnPrimary, background: "#F9F6EE", color: "#1B1B1B" } },
                 "Log meditation & journal ",
                 react_1.default.createElement(ChevronRight, { size: 16 }))),
@@ -19356,9 +19399,7 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
                     react_1.default.createElement("button", { onClick: () => setConfirmId(null), style: { ...btnGhost, flex: 1, justifyContent: "center", padding: "8px 12px", fontSize: 12.5 } }, "Keep it"),
                     react_1.default.createElement("button", { onClick: () => { setConfirmId(null); onDeleteEntry(p.id); }, style: { ...btnPrimary, background: "#BE3B2A", flex: 1, justifyContent: "center", padding: "8px 12px", fontSize: 12.5 } }, "Delete")))),
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#6E6759", marginTop: 8 } },
-                MEDITATION_TYPES.find((t) => t.key === p.type)?.label,
-                " \u00B7 ",
-                MEDITATION_RATINGS.find((r) => r.key === p.rating)?.label),
+                practiceReadout(p)),
             p.journal && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#1B1B1B", marginTop: 8, lineHeight: 1.6, fontStyle: "italic" } },
                 "\"",
                 p.journal,
