@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Ledger</title>
 <link rel="manifest" href="./manifest.webmanifest" />
-<meta name="theme-color" content="#111111" />
+<meta name="theme-color" content="#EFE9DC" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
@@ -13,11 +13,11 @@
 <link rel="icon" href="./icon-192.png" sizes="192x192" />
 <link rel="apple-touch-icon" href="./icon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #F4F4F1; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  #fallback { display: none; padding: 24px; color: #E8112D; max-width: 480px; margin: 40px auto; line-height: 1.6; }
+  body { margin: 0; background: #EFE9DC; font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  #fallback { display: none; padding: 24px; color: #BE3B2A; max-width: 480px; margin: 40px auto; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -18539,7 +18539,7 @@ function getExerciseRecommendation(sessions, key, exercises) {
             const atCap = (last.reps ?? cfg.targetReps) >= repCap;
             if (atCap) {
                 const startWeight = cfg.kettlebellStart ?? 15;
-                return { weight: startWeight, sets: cfg.targetSets, reps: repCap, action: "weight-ready", rationale: `Reps solid at the top of this progression for two sessions in a row — time to add a kettlebell. Starting at ${startWeight}${cfg.unit}, hold reps at ${repCap} while the weight is new.` };
+                return { weight: startWeight, sets: cfg.targetSets, reps: cfg.targetReps, action: "weight-ready", rationale: `Reps solid at the top of this progression for two sessions in a row — time to add a kettlebell. Starting at ${startWeight}${cfg.unit} and dropping back to ${cfg.targetReps} reps per side, since the load is what's new now.` };
             }
             const reps = Math.min(repCap, (last.reps ?? cfg.targetReps) + 1);
             return { weight: null, sets: cfg.targetSets, reps, action: "reps-up", rationale: `Two clean sessions — adding a rep per side (${reps}).` };
@@ -19354,7 +19354,7 @@ function App() {
             padding: "28px 18px 60px",
         } },
         react_1.default.createElement("style", null, `
-        @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
         * { box-sizing: border-box; }
         body { margin: 0; }
       `),
