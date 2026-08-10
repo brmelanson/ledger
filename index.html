@@ -19133,6 +19133,7 @@ function PracticeWizard({ onCancel, onComplete }) {
         current === "rating" && (react_1.default.createElement(Card, { title: "How did it feel?", sub: "A read on how settled the mind was \u2014 no wrong answer" },
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MEDITATION_RATINGS.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.rating === r.key, onClick: () => setEntry((e) => ({ ...e, rating: r.key })) }, r.label)))))),
         current === "journal" && (react_1.default.createElement(Card, { title: "Journal", sub: "Optional \u2014 whatever's worth writing down" },
+            react_1.default.createElement(PointerPrompt, { type: entry.type }),
             react_1.default.createElement("textarea", { value: entry.journal, onChange: (ev) => setEntry((e) => ({ ...e, journal: ev.target.value })), placeholder: "What came up, what you noticed, anything on your mind\u2026", style: {
                     width: "100%", minHeight: 140, borderRadius: 0, border: "2px solid #1B1B1B",
                     padding: 12, fontFamily: "'Inter', sans-serif", fontSize: 14, resize: "vertical",
@@ -19161,6 +19162,132 @@ function PracticeWizard({ onCancel, onComplete }) {
                 " Save entry")) : (react_1.default.createElement("button", { style: btnPrimary, onClick: next },
                 "Next ",
                 react_1.default.createElement(ChevronRight, { size: 16 }))))));
+}
+// ---------- practice pointers (daily contemplative prompt) ----------
+// A fixed library of short pointers drawn from Theravada insight sources.
+// Deliberately has no score, no streak, and no stage: the point is to put a
+// quality of attention in view, not to grade the sit. Rotation is derived from
+// the date, so the pointer is stable all day and cycles through the whole
+// library before repeating.
+const PRACTICE_POINTERS = [
+    { theme: "Attitude", text: "Check the attitude behind the watching. Is it curious, or is it trying to get somewhere?", source: "after Sayadaw U Tejaniya" },
+    { theme: "Attitude", text: "Wanting something to happen is greed. Pushing something away is aversion. Not noticing either is delusion. See which one is running.", source: "after Sayadaw U Tejaniya" },
+    { theme: "Attitude", text: "You don't have to make anything happen. You only have to know what is happening.", source: "after Sayadaw U Tejaniya" },
+    { theme: "Attitude", text: "Why focus so hard? Check whether the effort is coming from interest or from wanting a result.", source: "Sayadaw U Tejaniya" },
+    { theme: "Attitude", text: "The mind that watches is also an object. What state is it in right now?", source: "after Sayadaw U Tejaniya" },
+    { theme: "Attitude", text: "Is awareness comfortable and alert, or tense and narrow? Tension is information, not failure.", source: null },
+    { theme: "Attitude", text: "A sit full of distraction that you saw clearly is not a failed sit.", source: null },
+    { theme: "Quality of attention", text: "In the early discourses mindfulness stands back and observes rather than intervening. See whether attention can watch without correcting.", source: "after Bhikkhu Analayo" },
+    { theme: "Quality of attention", text: "Try the wide-angle lens — whole body, open mind — rather than a narrow beam drilled into one point.", source: "after Bhikkhu Analayo" },
+    { theme: "Quality of attention", text: "If you note, listen to the tone of the noting. Harsh, bored, soft? The tone matters more than the word.", source: "after Gil Fronsdal" },
+    { theme: "Quality of attention", text: "How do you pay attention in such a way that you stay soft and receptive?", source: "Gil Fronsdal" },
+    { theme: "Quality of attention", text: "Some traditions teach mindfulness as plunging into its object; the older texts teach it as receiving. You can feel the difference in your body.", source: null },
+    { theme: "Balance", text: "Energy and concentration balance each other. Restless means too much push; dull means too little. Which is it today?", source: null },
+    { theme: "Balance", text: "Faith and wisdom balance each other. Over-believing goes credulous; over-analyzing goes dry. Which way have you been leaning?", source: null },
+    { theme: "Balance", text: "Mindfulness is the one faculty that can never be excessive. Everything else can be overdone.", source: null },
+    { theme: "Balance", text: "The remedy for imbalance is to strengthen the opposite quality, not to fight the excess.", source: null },
+    { theme: "Balance", text: "Strong concentration with weak energy tips into idleness. If you keep sinking, that's the likely cause.", source: "Visuddhimagga" },
+    { theme: "Awakening factors", text: "When the mind is sluggish, this is the wrong time for calm. Rouse interest, energy, gladness instead.", source: "after SN 46.53" },
+    { theme: "Awakening factors", text: "When the mind is agitated, this is the wrong time for effort. Lean toward tranquility, collectedness, equanimity.", source: "after SN 46.53" },
+    { theme: "Awakening factors", text: "Ask first whether the mind is slack or agitated. The right medicine depends entirely on the answer.", source: null },
+    { theme: "Awakening factors", text: "Investigation isn't thinking about experience. It's an interested looking at what's actually here.", source: null },
+    { theme: "Awakening factors", text: "Gladness is a factor of awakening, not a distraction from it. If some arises, it's allowed.", source: null },
+    { theme: "Awakening factors", text: "Tranquility is the body and mind settling. Notice whether it arrives on its own once you stop pushing.", source: null },
+    { theme: "Hindrances", text: "The instruction is to know a hindrance is here, know how it came, know how it goes. Recognition comes before removal.", source: "Satipatthana Sutta" },
+    { theme: "Hindrances", text: "There's a difference between pushing a hindrance out of sight and seeing through it. Which did you do?", source: null },
+    { theme: "Hindrances", text: "Restlessness and worry are one pair; sloth and torpor another. They ask for opposite responses.", source: null },
+    { theme: "Hindrances", text: "Doubt is a hindrance, not a verdict on your practice.", source: null },
+    { theme: "Hindrances", text: "A pleasant state you're holding onto is a hindrance wearing a good disguise.", source: null },
+    { theme: "Hindrances", text: "The hindrances are called coverings — a lake whose bottom you can't see. The water isn't ruined, only stirred.", source: null },
+    { theme: "Clear knowing", text: "Mindfulness remembers to stay. Clear comprehension knows what's happening and why. Two different qualities.", source: null },
+    { theme: "Clear knowing", text: "Clear comprehension includes knowing whether what you're doing is suitable right now.", source: null },
+    { theme: "Clear knowing", text: "Bare attention is the beginning of right mindfulness, not the whole of it.", source: "after Nyanaponika Thera" },
+    { theme: "Clear knowing", text: "Knowing that feelings arise, remain, and pass — that knowing is already insight, not preparation for it.", source: null },
+    { theme: "Gaining mind", text: "Are you sitting to get something, or to put something down?", source: "after Ajahn Chah" },
+    { theme: "Gaining mind", text: "Ego can turn anything to its own use, including spiritual practice.", source: "after Chogyam Trungpa" },
+    { theme: "Gaining mind", text: "The mind that measures its own progress is exactly what the practice is meant to see through.", source: null },
+    { theme: "Gaining mind", text: "The sit doesn't owe you anything today.", source: null },
+    { theme: "Gaining mind", text: "Notice any impulse to compare this sit against a better one you remember.", source: null },
+    { theme: "Open question", text: "What can I learn here? Ask it on the difficult days especially.", source: "Rob Burbea" },
+    { theme: "Open question", text: "What does this difficulty ask me to let go of?", source: "Jack Kornfield" },
+    { theme: "Open question", text: "How have I added to this difficulty by my own response to it?", source: "after Jack Kornfield" },
+    { theme: "Open question", text: "What is the gold hidden in this situation?", source: "Jack Kornfield" },
+    { theme: "Open question", text: "Where is the value in a session where it seemed like nothing happened?", source: null },
+    { theme: "Metta", text: "Metta's near enemy is attachment — goodwill with a condition attached. Check for the condition.", source: "Visuddhimagga", types: ["metta"] },
+    { theme: "Metta", text: "Compassion's near enemy is grief. If it's tipping into being overwhelmed, that's the counterfeit.", source: "Visuddhimagga", types: ["metta"] },
+    { theme: "Metta", text: "Joy's near enemy is giddiness; equanimity's is indifference. Both sit very close to the real thing.", source: "Visuddhimagga", types: ["metta"] },
+    { theme: "Metta", text: "Metta is an attitude you commit to, not a warm feeling you produce.", source: "after Christina Feldman", types: ["metta"] },
+    { theme: "Metta", text: "If the phrases go mechanical, slow down rather than pushing harder. The words are a doorway, not the point.", source: null, types: ["metta"] },
+    { theme: "Metta", text: "Goodwill toward yourself isn't a preliminary to the real practice. It is the practice.", source: null, types: ["metta"] },
+    { theme: "Breath", text: "The breath doesn't need improving. Let it be the length it is.", source: null, types: ["breath"] },
+    { theme: "Breath", text: "Notice whether you're feeling the breath or thinking about it.", source: null, types: ["breath"] },
+    { theme: "Breath", text: "Anapanasati moves from breath to body to feeling to mind. The breath is a doorway, not a destination.", source: "Anapanasati Sutta", types: ["breath"] },
+    { theme: "Body scan", text: "Scanning can turn into hunting for sensation. See if sensation can come to you instead.", source: null, types: ["bodyScan"] },
+    { theme: "Body scan", text: "Sensation is the object; the knowing of it is what's being trained.", source: null, types: ["bodyScan"] },
+    { theme: "Body scan", text: "Equanimity toward pleasant sensation is the harder half of the practice.", source: null, types: ["bodyScan"] },
+    { theme: "Open awareness", text: "In open awareness the temptation is to manage the field. See if it can be left alone.", source: null, types: ["open"] },
+    { theme: "Open awareness", text: "Notice what awareness does when you stop giving it a job.", source: null, types: ["open"] },
+    { theme: "Open awareness", text: "Without a chosen object, the mind's habits show themselves more plainly. That's the value, not a problem.", source: null, types: ["open"] },
+    { theme: "Breath", text: "Lengthen nothing. The only job is to know this breath as it is.", source: null, types: ["breath"] },
+    { theme: "Breath", text: "When the breath gets subtle, the usual mistake is to grip harder. Soften instead.", source: null, types: ["breath"] },
+    { theme: "Breath", text: "Count if the mind is scattered; drop counting once it settles. The tool is not the practice.", source: null, types: ["breath"] },
+    { theme: "Breath", text: "Where do you actually feel it today — nostrils, chest, belly? Let the body choose.", source: null, types: ["breath"] },
+    { theme: "Body scan", text: "A part with no sensation is still an honest observation. Don't manufacture something to find.", source: null, types: ["bodyScan"] },
+    { theme: "Body scan", text: "Pain and pleasure are both just sensation being known. Watch which one you lean toward.", source: null, types: ["bodyScan"] },
+    { theme: "Body scan", text: "Sweeping fast builds momentum; sweeping slow builds precision. Notice which the mind needs.", source: null, types: ["bodyScan"] },
+    { theme: "Body scan", text: "The body is the first foundation of mindfulness, not a warm-up for the others.", source: "Satipatthana Sutta", types: ["bodyScan"] },
+    { theme: "Open awareness", text: "When there's no chosen object, notice what the mind reaches for on its own.", source: null, types: ["open"] },
+    { theme: "Open awareness", text: "Open awareness isn't a blank mind. It's a mind that isn't picking.", source: null, types: ["open"] },
+    { theme: "Open awareness", text: "If it drifts into daydream, that's the edge of the practice, not a failure of it.", source: null, types: ["open"] },
+    { theme: "Open awareness", text: "Can awareness know a sound and a thought and a sensation without ranking them?", source: null, types: ["open"] },
+    { theme: "Metta", text: "Start where it flows easily. Forcing metta toward a hard person too early teaches the mind to fake it.", source: "Visuddhimagga", types: ["metta"] },
+    { theme: "Metta", text: "Notice whether the goodwill narrows when you turn it toward yourself.", source: null, types: ["metta"] },
+];
+function pointerPool(type) {
+    const general = PRACTICE_POINTERS.filter((p) => !p.types);
+    if (!type)
+        return general;
+    const matched = PRACTICE_POINTERS.filter((p) => p.types && p.types.indexOf(type) !== -1);
+    // Type-specific pointers are few, so blend them with the general pool rather
+    // than showing the same handful every time he picks that practice.
+    return matched.length ? matched : general;
+}
+function pointerForDate(dateStr, pool, offset) {
+    const n = pool.length;
+    if (n === 0)
+        return null;
+    const days = Math.floor(Date.parse(dateStr + "T00:00:00") / 86400000);
+    if (!Number.isFinite(days))
+        return pool[0];
+    const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+    let stride = 17;
+    while (gcd(stride, n) !== 1)
+        stride += 1;
+    return pool[(((days * stride) % n) + n + (offset || 0)) % n];
+}
+function DailyPointer() {
+    const [offset, setOffset] = (0, react_1.useState)(0);
+    const p = pointerForDate(localDateStr(), pointerPool(null), offset);
+    if (!p)
+        return null;
+    return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "16px 18px" } },
+        react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759" } }, p.theme),
+            react_1.default.createElement("button", { onClick: () => setOffset((o) => o + 1), title: "Show another pointer", style: {
+                    border: "2px solid #D8D0BF", background: "#F9F6EE", color: "#6E6759", borderRadius: 0,
+                    cursor: "pointer", padding: "3px 9px", flex: "0 0 auto",
+                    fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 0.8, textTransform: "uppercase",
+                } }, "Another")),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 15, lineHeight: 1.65, color: "#1B1B1B", marginTop: 10 } }, p.text),
+        p.source && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759", marginTop: 10 } }, p.source))));
+}
+function PointerPrompt({ type }) {
+    const p = pointerForDate(localDateStr(), pointerPool(type), 0);
+    if (!p)
+        return null;
+    return (react_1.default.createElement("div", { style: { border: "2px dotted #A9A192", background: "#EFE9DC", padding: "10px 12px", marginBottom: 12 } },
+        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 6 } }, "Worth considering"),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, p.text)));
 }
 function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
     const [editingId, setEditingId] = (0, react_1.useState)(null);
@@ -19193,6 +19320,7 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
             react_1.default.createElement("button", { onClick: onStartLog, style: { ...btnPrimary, background: "#F9F6EE", color: "#1B1B1B" } },
                 "Log meditation & journal ",
                 react_1.default.createElement(ChevronRight, { size: 16 }))),
+        react_1.default.createElement(DailyPointer, null),
         practice.length === 0 ? (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#6E6759", textAlign: "center", padding: "20px 0" } }, "No entries yet \u2014 your first sit will start the log.")) : (ordered.map((p) => (react_1.default.createElement("div", { key: p.id, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "14px 18px" } },
             react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
                 react_1.default.createElement("button", { onClick: () => { setEditingId(editingId === p.id ? null : p.id); setConfirmId(null); }, title: "Tap to change the date", style: {
