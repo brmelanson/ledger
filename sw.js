@@ -2,7 +2,7 @@
 // Bump CACHE_VERSION whenever a new build of index.html ships — the activate
 // step wipes older caches, and skipWaiting/clients.claim make the new version
 // take over on the next launch rather than the one after.
-const CACHE_VERSION = "ledger-v9";
+const CACHE_VERSION = "ledger-v10";
 
 const SHELL = [
   "./",
