@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the storage read-back check moved inside the write layer, so every entry type (sessions, practice, plan, exercises, stretches, recipes, meal plan) reports a refused save through one banner in App rather than Kitchen alone; a recent-sits strip on the mind step of the practice wizard showing the last five energy/attitude readings side by side; and an annual sila period, September 1 to October 31, with a Today-tab band carrying the five precepts with the day's one highlighted, hand-made opening and closing markers persisted under the sila key, a sila pointer subpool that takes two days in three during the period, and a sila journal prompt above the journal field. PWA icons at 192, 512 and maskable. Palette rules unchanged: blue #0043FF action only, yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string and into a kitchen-rules storage key, seeded from the eight constraints that were previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, with the raw note kept verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations), both preserved through mergeRecipes. Edits are folded into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that converts a named cook's recipe to this kitchen via buildImportSystem, with attribution captured from the form rather than the model. A Cooks panel lists who the kitchen is learning from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette rules unchanged: blue #0043FF action only, yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -385,6 +385,7 @@ const STORAGE_LABELS = {
   &quot;recipes-config&quot;: &quot;that recipe&quot;,
   &quot;meal-plan&quot;: &quot;that meal plan change&quot;,
   &quot;sila&quot;: &quot;that sila marker&quot;,
+  &quot;kitchen-rules&quot;: &quot;that kitchen rule&quot;,
   &quot;log-draft&quot;: &quot;the in-progress workout draft&quot;,
 };
 
@@ -503,6 +504,11 @@ function mergeRecipes(stored) {
       verdict: u.verdict ?? null,
       verdictNote: u.verdictNote || &quot;&quot;,
       cuisine: u.cuisine || base.cuisine || &quot;&quot;,
+      // Edits and provenance are pure cook-authored data with no app-authored
+      // original to fall back on. Same class of bug as the verdict one: leave
+      // them out of the merge and they vanish at the next launch.
+      edits: Array.isArray(u.edits) ? u.edits : (base.edits || []),
+      source: u.source || base.source || null,
     };
   });
   const baseKeys = new Set(DEFAULT_RECIPES.map((r) =&gt; r.key));
@@ -610,8 +616,11 @@ async function loadState() {
     const mealPlan = mp ? JSON.parse(mp.value) : SEED_MEAL_PLAN;
     const sl = lsGet(&quot;sila&quot;);
     const sila = sl ? JSON.parse(sl.value) : {};
+    const kr = lsGet(&quot;kitchen-rules&quot;);
+    const kitchenRules = kr ? mergeRules(JSON.parse(kr.value)) : SEED_RULES;
     return {
       sila,
+      kitchenRules,
       sessions: s ? JSON.parse(s.value) : SEED_SESSIONS,
       plan: p ? mergePlan(JSON.parse(p.value)) : null,
       practice,
@@ -621,7 +630,7 @@ async function loadState() {
       mealPlan,
     };
   } catch (e) {
-    return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN, sila: {} };
+    return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN, sila: {}, kitchenRules: SEED_RULES };
   }
 }
 async function saveSessions(sessions) { lsSet(&quot;sessions&quot;, JSON.stringify(sessions)); }
@@ -632,6 +641,7 @@ async function saveStretches(stretches) { lsSet(&quot;stretches-config&quot;, JS
 async function saveRecipes(recipes) { lsSet(&quot;recipes-config&quot;, JSON.stringify(recipes)); }
 async function saveMealPlan(mealPlan) { lsSet(&quot;meal-plan&quot;, JSON.stringify(mealPlan)); }
 async function saveSila(sila) { lsSet(&quot;sila&quot;, JSON.stringify(sila)); }
+async function saveKitchenRules(rules) { lsSet(&quot;kitchen-rules&quot;, JSON.stringify(rules)); }
 
 function getApiKey() {
   try { return localStorage.getItem(&quot;ledger:api-key&quot;) || &quot;&quot;; } catch (e) { return &quot;&quot;; }
@@ -2449,6 +2459,57 @@ function pointerForDate(dateStr, pool, offset) {
   return pool[(((days * stride) % n) + n + (offset || 0)) % n];
 }
 
+// ---------- kitchen rules (the cook&#x27;s own knowledge base) ----------
+// These used to be hard-coded into the chef prompt, which meant every lesson
+// learned at the stove cost a rebuild and an upload to write down. They live in
+// storage now: the seeded ones are the constraints this kitchen already proved,
+// and anything added later carries exactly the same weight. The chef assembles
+// its constraints from this list at prompt time.
+//
+// A rule is not a diary entry. Twenty sharp constraints make the chef sharper;
+// two hundred observations make it worse and bury the ones that matter, which
+// is why the editor pushes toward instructions and makes pruning easy.
+const SEED_RULES = [
+  { id: &quot;r-oven&quot;, text: &quot;The oven runs hot. Always 400°F on the middle rack, and give a target internal temperature for any protein rather than relying on time.&quot;, why: &quot;Timings from recipes overshoot in this oven.&quot;, seeded: true },
+  { id: &quot;r-greens&quot;, text: &quot;Use kale (massaged, lacinato) for anything that has to last five days. Spinach dies by day 3-4 — only use it if you say so explicitly.&quot;, why: &quot;Learned from prep batches going slimy midweek.&quot;, seeded: true },
+  { id: &quot;r-cilantro&quot;, text: &quot;Cilantro is a finishing herb only. Never cooked in.&quot;, why: &quot;&quot;, seeded: true },
+  { id: &quot;r-cumin&quot;, text: &quot;Cumin: 1 to 1.5 tsp maximum, ever.&quot;, why: &quot;It has ruined a batch here before — needed yogurt, lemon and cucumber to rescue it.&quot;, seeded: true },
+  { id: &quot;r-cannedfish&quot;, text: &quot;Canned fish did not land here. The texture is the problem, not the seasoning. Do not build a dish around canned salmon or canned tuna unless explicitly asked for it.&quot;, why: &quot;The canned salmon bowls: dressing was a keeper, the fish was not.&quot;, seeded: true },
+  { id: &quot;r-rotisserie&quot;, text: &quot;Rotisserie chicken is a legitimate and preferred shortcut for any chicken recipe.&quot;, why: &quot;A batch failed on under-thawed thighs; the rotisserie rebuild was excellent.&quot;, seeded: true },
+  { id: &quot;r-equipment&quot;, text: &quot;Equipment available: Zojirushi rice cooker, foil-lined sheet pans, standard pots and pans. No sous vide or specialty gear.&quot;, why: &quot;&quot;, seeded: true },
+  { id: &quot;r-shopping&quot;, text: &quot;Shopping happens in western Massachusetts near Leverett — Big Y, Market Basket, sometimes Food City. Ordinary New England supermarkets, not specialty grocers. If a dish really wants an Asian-market or Middle Eastern ingredient, name the supermarket substitute instead and say what was swapped.&quot;, why: &quot;&quot;, seeded: true },
+];
+
+// Seeded rules can be edited or deleted like any other — the merge only fills in
+// ones that have never been seen, so a rule deliberately removed stays removed
+// instead of reappearing at every launch.
+function mergeRules(stored) {
+  if (!Array.isArray(stored)) return SEED_RULES;
+  return stored.filter((r) =&gt; r &amp;&amp; typeof r.text === &quot;string&quot; &amp;&amp; r.text.trim());
+}
+
+function rulesBlock(rules) {
+  const list = (rules || []).filter((r) =&gt; r &amp;&amp; (r.text || &quot;&quot;).trim());
+  if (!list.length) return &quot;&quot;;
+  return &quot;NON-NEGOTIABLE CONSTRAINTS — this kitchen has taught these the hard way:\n&quot; +
+    list.map((r) =&gt; `- ${r.text.trim()}${(r.why || &quot;&quot;).trim() ? ` (${r.why.trim()})` : &quot;&quot;}`).join(&quot;\n&quot;);
+}
+
+// Freewriting is the point: the cook should be able to dump what happened at the
+// stove without composing an instruction. This turns that into a rule the chef
+// can actually obey, and hands it back for editing rather than saving it blind.
+const RULE_DISTILL_SYSTEM = `You turn a home cook&#x27;s rough notes into a single durable kitchen rule for a recipe-generating chef.
+
+The note describes something learned while cooking. Convert it into ONE instruction the chef must follow in future recipes. Requirements:
+- Write the rule as a directive, addressed to the chef, in the imperative. Not a story, not a past-tense report.
+- Keep it to one or two sentences. Be specific: quantities, temperatures, ingredient names, and timings if the note gives them.
+- Do not invent detail the note does not contain. If the note is vague, keep the rule correspondingly broad rather than making something up.
+- If the note contains more than one distinct lesson, pick the single most useful one and put the rest aside.
+- &quot;why&quot; is a short phrase giving the reason or the incident behind it, in the cook&#x27;s own terms. Leave it empty if the note gives no reason.
+
+Respond with ONLY a JSON object, no markdown fence, no preamble:
+{&quot;text&quot;:&quot;&quot;,&quot;why&quot;:&quot;&quot;}`;
+
 // ---------- sila period (annual training period) ----------
 // Two months given over to the training precepts, September 1 to October 31,
 // every year. It is not a streak and there is nothing to score. The period does
@@ -2785,6 +2846,7 @@ function App() {
   const [recipes, setRecipes] = useState(DEFAULT_RECIPES);
   const [mealPlan, setMealPlan] = useState([]);
   const [sila, setSila] = useState({});
+  const [kitchenRules, setKitchenRules] = useState(SEED_RULES);
   const [saveWarning, setSaveWarning] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState(&quot;&quot;);
@@ -2797,7 +2859,7 @@ function App() {
   }, []);
 
   useEffect(() =&gt; {
-    loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp, sila: sl }) =&gt; {
+    loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp, sila: sl, kitchenRules: kr }) =&gt; {
       setSessions(s);
       if (p) setPlan(p);
       setPractice(pr || []);
@@ -2806,6 +2868,7 @@ function App() {
       setRecipes(rc || DEFAULT_RECIPES);
       setMealPlan(mp || []);
       setSila(sl || {});
+      setKitchenRules(Array.isArray(kr) ? kr : SEED_RULES);
       setLoaded(true);
     });
   }, []);
@@ -2837,6 +2900,14 @@ function App() {
   // One subscriber for every refused write in the app. The write layer names
   // the thing that didn&#x27;t stick; this puts it on screen once, wherever he is.
   useEffect(() =&gt; onStorageFailure((what) =&gt; setSaveWarning(what)), []);
+
+  const updateKitchenRules = useCallback((updater) =&gt; {
+    setKitchenRules((prev) =&gt; {
+      const next = typeof updater === &quot;function&quot; ? updater(prev) : updater;
+      saveKitchenRules(next);
+      return next;
+    });
+  }, []);
 
   const updateSila = useCallback((updater) =&gt; {
     setSila((prev) =&gt; {
@@ -3022,7 +3093,7 @@ function App() {
             onDeleteEntry={handlePracticeDelete}
           /&gt;
         ) : tab === &quot;kitchen&quot; ? (
-          &lt;KitchenTab recipes={recipes} setRecipes={updateRecipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} sessions={sessions} /&gt;
+          &lt;KitchenTab recipes={recipes} setRecipes={updateRecipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} sessions={sessions} rules={kitchenRules} setRules={updateKitchenRules} /&gt;
         ) : tab === &quot;history&quot; ? (
           &lt;HistoryTab sessions={sessions} exercises={exercises} allStretches={stretches} recipes={recipes} mealPlan={mealPlan} /&gt;
         ) : (
@@ -3427,19 +3498,9 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
 // which greens survive five days, and how the food gets stored. The verdicts
 // recorded on recipe cards get appended to it, so a batch that failed once
 // becomes a rule the chef obeys forever instead of a lesson only I remember.
-const CHEF_BASE = `You are a Michelin-level chef whose specialty is healthy food that a single person actually wants to eat. Your food is genuinely delicious and technique-driven, never bland &quot;meal prep&quot; food, but the methods must stay achievable on a weeknight.
+const CHEF_OPENING = `You are a Michelin-level chef whose specialty is healthy food that a single person actually wants to eat. Your food is genuinely delicious and technique-driven, never bland &quot;meal prep&quot; food, but the methods must stay achievable on a weeknight.`;
 
-NON-NEGOTIABLE CONSTRAINTS — this kitchen has taught these the hard way:
-- The oven runs hot. Always 400°F on the middle rack. Give a target internal temperature for any protein rather than relying on time.
-- Kale (massaged, lacinato) for anything that must last five days. Spinach dies by day 3-4 — only use it if you say so explicitly.
-- Cilantro is a finishing herb only. Never cooked in.
-- Cumin: 1 to 1.5 tsp maximum, ever. It has ruined a batch here before.
-- Canned fish did NOT land here. The texture is the problem, not the seasoning. Do not build a dish around canned salmon or canned tuna unless explicitly asked for it.
-- Rotisserie chicken is a legitimate and preferred shortcut for any chicken recipe.
-- Equipment available: Zojirushi rice cooker, foil-lined sheet pans, standard pots and pans, no sous vide or specialty gear.
-- SHOPPING happens in western Massachusetts, near Leverett — Big Y, Market Basket, and sometimes Food City. These are ordinary New England supermarkets, not specialty grocers. Do not call for anything that would need a trip to an Asian market, a Middle Eastern grocer, or a co-op. If a dish really wants such an ingredient, name the supermarket substitute instead and say what was swapped.
-
-NUTRITION TARGET: this person lifts three times a week and wants 25-40g of protein per serving. Hit that range. Estimate protein and fiber per serving honestly.
+const CHEF_TAIL = `NUTRITION TARGET: this person lifts three times a week and wants 25-40g of protein per serving. Hit that range. Estimate protein and fiber per serving honestly.
 
 Every recipe must include a TECHNIQUE note: the one piece of craft that makes this dish better than the obvious version of itself, explained in a way that teaches something.
 
@@ -3484,6 +3545,13 @@ function kitchenHistory(recipes) {
       loved.map((r) =&gt; `- ${r.name}${r.cuisine ? ` (${r.cuisine})` : &quot;&quot;}`).join(&quot;\n&quot;)
     );
   }
+  const adjusted = list.filter((r) =&gt; Array.isArray(r.edits) &amp;&amp; r.edits.length);
+  if (adjusted.length) {
+    blocks.push(
+      &quot;ADJUSTMENTS MADE AT THE STOVE — these are the cook&#x27;s own corrections to recipes already made here. Treat them as evidence about this palate and this kitchen, and carry the lesson into anything similar:\n&quot; +
+      adjusted.map((r) =&gt; `- ${r.name}:\n` + r.edits.map((e) =&gt; `    · ${e.text}`).join(&quot;\n&quot;)).join(&quot;\n&quot;)
+    );
+  }
   if (cooked.length) {
     const names = cooked.map((r) =&gt; r.name).join(&quot;; &quot;);
     const cuisines = Array.from(new Set(cooked.map((r) =&gt; r.cuisine).filter(Boolean)));
@@ -3495,13 +3563,42 @@ function kitchenHistory(recipes) {
   return blocks.length ? &quot;\n\n&quot; + blocks.join(&quot;\n\n&quot;) : &quot;&quot;;
 }
 
-function buildChefSystem(recipes, scope, angle) {
+function buildChefSystem(recipes, scope, angle, rules) {
   return [
-    CHEF_BASE,
+    CHEF_OPENING,
+    rulesBlock(rules),
+    CHEF_TAIL,
     scope === &quot;meal&quot; ? SCOPE_MEAL : SCOPE_PREP,
     ANGLES[angle] || &quot;&quot;,
     kitchenHistory(recipes),
     CHEF_JSON,
+  ].filter(Boolean).join(&quot;\n\n&quot;);
+}
+
+// Bringing in someone else&#x27;s recipe. The chef is a converter here, not an
+// author: it fits the dish to this kitchen and says what it changed, and the
+// cook whose recipe it is stays named on the card.
+const CHEF_IMPORT = `SCOPE: convert a recipe that came from a named cook into this kitchen&#x27;s format.
+
+You did not write this recipe and you are not replacing its author. Your job is to fit it to this kitchen and to be honest about every change you made.
+
+- Keep the dish recognisably the same dish. Do not redesign it, do not rename it into something else, and do not quietly substitute the thing that makes it what it is.
+- Apply the constraints above where they genuinely conflict with the original, and nowhere else. Leaving the recipe alone is a valid outcome.
+- Scale it to the servings asked for and recalculate quantities honestly.
+- Put every change you made into &quot;adaptations&quot; as short plain lines: what you changed and why. If you changed nothing, return an empty array.
+- The &quot;technique&quot; note should teach the craft the original author was actually using, not a technique you prefer.
+- Estimate protein and fiber per serving honestly. If the dish simply does not reach the protein target, say so in &quot;adaptations&quot; rather than padding it with an ingredient the author never used.`;
+
+const CHEF_IMPORT_JSON = `Respond with ONLY a JSON object, no markdown fence, no preamble. Same shape as a generated recipe plus &quot;adaptations&quot;. Omit any grocery department where nothing is bought:
+{&quot;name&quot;:&quot;&quot;,&quot;scope&quot;:&quot;meal&quot;,&quot;servings&quot;:1,&quot;cuisine&quot;:&quot;&quot;,&quot;protein&quot;:&quot;&quot;,&quot;grain&quot;:&quot;&quot;,&quot;veg&quot;:&quot;&quot;,&quot;sauce&quot;:&quot;&quot;,&quot;proteinG&quot;:0,&quot;fiberG&quot;:0,&quot;activeMinutes&quot;:0,&quot;prepNotes&quot;:&quot;&quot;,&quot;technique&quot;:&quot;&quot;,&quot;adaptations&quot;:[&quot;halved the butter&quot;],&quot;ingredients&quot;:[&quot;2 lbs boneless chicken thighs&quot;],&quot;method&quot;:[{&quot;t&quot;:&quot;step title&quot;,&quot;d&quot;:&quot;step detail&quot;}],&quot;grocery&quot;:{&quot;produce&quot;:[],&quot;meatSeafood&quot;:[],&quot;deli&quot;:[],&quot;dairy&quot;:[],&quot;bakery&quot;:[],&quot;cannedJarred&quot;:[],&quot;dryGoods&quot;:[],&quot;spices&quot;:[],&quot;frozen&quot;:[],&quot;other&quot;:[],&quot;notes&quot;:&quot;&quot;}}`;
+
+function buildImportSystem(recipes, rules) {
+  return [
+    CHEF_OPENING,
+    rulesBlock(rules),
+    CHEF_IMPORT,
+    kitchenHistory(recipes),
+    CHEF_IMPORT_JSON,
   ].filter(Boolean).join(&quot;\n\n&quot;);
 }
 
@@ -3532,6 +3629,11 @@ async function askChef(request, system) {
   if (first &lt; 0 || last &lt; 0) throw new Error(&quot;Could not read a recipe from the response.&quot;);
   return JSON.parse(cleaned.slice(first, last + 1));
 }
+
+const importField = {
+  width: &quot;100%&quot;, padding: &quot;9px 10px&quot;, border: &quot;2px solid #1B1B1B&quot;, borderRadius: 0,
+  fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;,
+};
 
 const ANGLE_LABELS = [
   { key: &quot;onhand&quot;, label: &quot;Use what I have&quot;, hint: &quot;type what&#x27;s in the fridge below&quot; },
@@ -3609,7 +3711,397 @@ function GroceryList({ recipe }) {
   );
 }
 
-function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
+// The cook&#x27;s own knowledge base. Freewriting is the entry point on purpose:
+// composing an instruction is a different, harder task than saying what
+// happened, and asking for the harder one at the stove means it never gets
+// written down at all. The chef does the conversion and hands it back to edit.
+function KitchenRules({ rules, setRules }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState(&quot;&quot;);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [pending, setPending] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const list = rules || [];
+
+  const distill = async () =&gt; {
+    const body = note.trim();
+    if (!body) { setError(&quot;Write what happened first — a sentence or two is plenty.&quot;); return; }
+    setBusy(true); setError(null);
+    try {
+      const result = await askChef(body, RULE_DISTILL_SYSTEM);
+      setPending({ text: (result.text || &quot;&quot;).trim() || body, why: (result.why || &quot;&quot;).trim() });
+    } catch (e) {
+      // No key, no signal, or a refusal to parse — none of which should cost
+      // the cook the thing they just wrote. Keep it verbatim and let them edit.
+      setPending({ text: body, why: &quot;&quot; });
+      setError(e.message === &quot;no-key&quot;
+        ? &quot;Saved as written — sharpening it into a rule needs your API key, but the note is kept either way.&quot;
+        : &quot;Saved as written — could not reach the chef to sharpen it. Edit it by hand if you like.&quot;);
+    }
+    setBusy(false);
+  };
+
+  const commit = () =&gt; {
+    if (!pending || !pending.text.trim()) return;
+    const rule = { id: &quot;r&quot; + uid(), text: pending.text.trim(), why: (pending.why || &quot;&quot;).trim(), added: localDateStr() };
+    setRules((prev) =&gt; [...(prev || []), rule]);
+    setPending(null); setNote(&quot;&quot;); setError(null);
+  };
+
+  const update = (id, field, value) =&gt; {
+    setRules((prev) =&gt; (prev || []).map((r) =&gt; (r.id === id ? { ...r, [field]: value } : r)));
+  };
+  const remove = (id) =&gt; {
+    setRules((prev) =&gt; (prev || []).filter((r) =&gt; r.id !== id));
+    setEditingId(null);
+  };
+
+  return (
+    &lt;div style={{ border: &quot;2.5px solid #1B1B1B&quot;, background: &quot;#F9F6EE&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot; }}&gt;
+      &lt;button onClick={() =&gt; setOpen(!open)} style={{
+        width: &quot;100%&quot;, textAlign: &quot;left&quot;, background: &quot;none&quot;, border: &quot;none&quot;, padding: 16, cursor: &quot;pointer&quot;, display: &quot;block&quot;,
+      }}&gt;
+        &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot; }}&gt;
+          What this kitchen knows
+        &lt;/div&gt;
+        &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, marginTop: 4, lineHeight: 1.5 }}&gt;
+          {list.length} rule{list.length === 1 ? &quot;&quot; : &quot;s&quot;} the chef obeys · tap to {open ? &quot;close&quot; : &quot;add or prune&quot;}
+        &lt;/div&gt;
+      &lt;/button&gt;
+
+      {open &amp;&amp; (
+        &lt;div style={{ borderTop: &quot;2px solid #1B1B1B&quot;, padding: 16, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 14 }}&gt;
+
+          &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#6E6759&quot;, lineHeight: 1.6 }}&gt;
+            Write what happened at the stove — rough is fine, don&#x27;t compose it. It gets turned into an instruction the chef follows, and you get the last word before it&#x27;s saved.
+          &lt;/div&gt;
+
+          &lt;textarea
+            value={note}
+            onChange={(e) =&gt; setNote(e.target.value)}
+            placeholder=&quot;the soy sauce was way too salty even the low sodium one, next time cut it with water. also the eggplant skin went leathery, maybe the oven was too hot&quot;
+            style={{
+              width: &quot;100%&quot;, minHeight: 88, border: &quot;2px solid #1B1B1B&quot;, padding: 10,
+              fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, resize: &quot;vertical&quot;,
+            }}
+          /&gt;
+
+          {!pending &amp;&amp; (
+            &lt;button onClick={distill} disabled={busy} style={{
+              ...btnPrimary, opacity: busy ? 0.6 : 1, padding: &quot;10px 14px&quot;, fontSize: 12.5, alignSelf: &quot;flex-start&quot;,
+            }}&gt;
+              {busy ? &quot;Working…&quot; : &quot;Make this a rule&quot;}
+            &lt;/button&gt;
+          )}
+
+          {error &amp;&amp; (
+            &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, lineHeight: 1.55 }}&gt;
+              {error}
+            &lt;/div&gt;
+          )}
+
+          {pending &amp;&amp; (
+            &lt;div style={{ border: &quot;2px solid #0043FF&quot;, background: &quot;#E4E9FF&quot;, padding: 14, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 10 }}&gt;
+              &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#0043FF&quot; }}&gt;
+                Yours to edit before it saves
+              &lt;/div&gt;
+              &lt;textarea
+                value={pending.text}
+                onChange={(e) =&gt; setPending({ ...pending, text: e.target.value })}
+                style={{
+                  width: &quot;100%&quot;, minHeight: 68, border: &quot;2px solid #1B1B1B&quot;, padding: 10,
+                  fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, resize: &quot;vertical&quot;,
+                }}
+              /&gt;
+              &lt;input
+                value={pending.why}
+                onChange={(e) =&gt; setPending({ ...pending, why: e.target.value })}
+                placeholder=&quot;why — optional, the incident behind it&quot;
+                style={{
+                  width: &quot;100%&quot;, padding: &quot;9px 10px&quot;, border: &quot;2px solid #1B1B1B&quot;,
+                  fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;,
+                }}
+              /&gt;
+              &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot; }}&gt;
+                &lt;button onClick={commit} style={{ ...btnPrimary, padding: &quot;9px 14px&quot;, fontSize: 12.5 }}&gt;Save rule&lt;/button&gt;
+                &lt;button onClick={() =&gt; { setPending(null); setError(null); }} style={{ ...btnGhost, padding: &quot;9px 14px&quot;, fontSize: 12.5 }}&gt;Discard&lt;/button&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          )}
+
+          {list.length &gt;= 25 &amp;&amp; (
+            &lt;div style={{ border: &quot;2px solid #2F6B4F&quot;, background: &quot;#E5EDE4&quot;, padding: &quot;10px 12px&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
+              {list.length} rules is a lot to hold at once. The sharp ones work better without the rest around them — worth pruning anything that has stopped being true.
+            &lt;/div&gt;
+          )}
+
+          &lt;div style={{ borderTop: &quot;2px solid #D8D0BF&quot;, paddingTop: 12, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 10 }}&gt;
+            {list.length === 0 ? (
+              &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#6E6759&quot;, lineHeight: 1.6 }}&gt;
+                No rules yet — the chef is running on its general training alone.
+              &lt;/div&gt;
+            ) : list.map((r) =&gt; (
+              &lt;div key={r.id} style={{ border: &quot;2px solid #D8D0BF&quot;, padding: &quot;10px 12px&quot; }}&gt;
+                {editingId === r.id ? (
+                  &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
+                    &lt;textarea
+                      value={r.text}
+                      onChange={(e) =&gt; update(r.id, &quot;text&quot;, e.target.value)}
+                      style={{
+                        width: &quot;100%&quot;, minHeight: 64, border: &quot;2px solid #1B1B1B&quot;, padding: 9,
+                        fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, resize: &quot;vertical&quot;,
+                      }}
+                    /&gt;
+                    &lt;input
+                      value={r.why || &quot;&quot;}
+                      onChange={(e) =&gt; update(r.id, &quot;why&quot;, e.target.value)}
+                      placeholder=&quot;why — optional&quot;
+                      style={{
+                        width: &quot;100%&quot;, padding: &quot;8px 10px&quot;, border: &quot;2px solid #1B1B1B&quot;,
+                        fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;,
+                      }}
+                    /&gt;
+                    &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot; }}&gt;
+                      &lt;button onClick={() =&gt; setEditingId(null)} style={{ ...btnGhost, padding: &quot;8px 12px&quot;, fontSize: 12 }}&gt;Done&lt;/button&gt;
+                      &lt;button onClick={() =&gt; remove(r.id)} style={{ ...btnGhost, padding: &quot;8px 12px&quot;, fontSize: 12, color: &quot;#BE3B2A&quot;, borderColor: &quot;#BE3B2A&quot; }}&gt;Delete rule&lt;/button&gt;
+                    &lt;/div&gt;
+                  &lt;/div&gt;
+                ) : (
+                  &lt;button onClick={() =&gt; setEditingId(r.id)} style={{
+                    width: &quot;100%&quot;, textAlign: &quot;left&quot;, background: &quot;none&quot;, border: &quot;none&quot;, padding: 0, cursor: &quot;pointer&quot;, display: &quot;block&quot;,
+                  }}&gt;
+                    &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
+                      {r.text}
+                    &lt;/div&gt;
+                    {(r.why || &quot;&quot;).trim() &amp;&amp; (
+                      &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontStyle: &quot;italic&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, marginTop: 5, lineHeight: 1.55 }}&gt;
+                        {r.why}
+                      &lt;/div&gt;
+                    )}
+                  &lt;/button&gt;
+                )}
+              &lt;/div&gt;
+            ))}
+          &lt;/div&gt;
+        &lt;/div&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+
+// Where a recipe came from, shown at cook time rather than buried. A dish from
+// a named cook says so on the card; a generated one says that too, so the
+// difference stays visible instead of blurring.
+function Provenance({ source, generated }) {
+  const src = source || (generated ? { kind: &quot;chef&quot; } : null);
+  if (!src) return null;
+  if (src.kind === &quot;chef&quot;) {
+    return (
+      &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, border: &quot;1.5px solid #A9A192&quot;, color: &quot;#6E6759&quot;, padding: &quot;2px 6px&quot;, textTransform: &quot;uppercase&quot;, letterSpacing: 0.6 }}&gt;
+        Chef
+      &lt;/span&gt;
+    );
+  }
+  return (
+    &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, border: &quot;1.5px solid #1B1B1B&quot;, color: &quot;#1B1B1B&quot;, padding: &quot;2px 6px&quot;, textTransform: &quot;uppercase&quot;, letterSpacing: 0.6 }}&gt;
+      {src.cook ? src.cook : &quot;From a cook&quot;}
+    &lt;/span&gt;
+  );
+}
+
+function SourceBlock({ source }) {
+  if (!source || source.kind === &quot;chef&quot;) return null;
+  const bits = [source.cook, source.site].filter(Boolean).join(&quot; · &quot;);
+  return (
+    &lt;div style={{ border: &quot;2px solid #1B1B1B&quot;, padding: &quot;10px 14px&quot; }}&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 5 }}&gt;
+        Recipe by
+      &lt;/div&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, fontWeight: 600, color: &quot;#1B1B1B&quot;, lineHeight: 1.5 }}&gt;
+        {bits || &quot;Unattributed&quot;}
+      &lt;/div&gt;
+      {(source.upstream || &quot;&quot;).trim() &amp;&amp; (
+        &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, marginTop: 4, lineHeight: 1.55 }}&gt;
+          Adapted by them from {source.upstream}
+        &lt;/div&gt;
+      )}
+      {(source.url || &quot;&quot;).trim() &amp;&amp; (
+        &lt;a href={source.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{
+          display: &quot;inline-block&quot;, marginTop: 8, fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11.5, color: &quot;#0043FF&quot;,
+        }}&gt;
+          Open the original ↗
+        &lt;/a&gt;
+      )}
+      {Array.isArray(source.adaptations) &amp;&amp; source.adaptations.length &gt; 0 &amp;&amp; (
+        &lt;div style={{ marginTop: 10, borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 8 }}&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 5 }}&gt;
+            Changed to fit this kitchen
+          &lt;/div&gt;
+          {source.adaptations.map((a, i) =&gt; (
+            &lt;div key={i} style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;· {a}&lt;/div&gt;
+          ))}
+        &lt;/div&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+
+// What changed and how it went, in the cook&#x27;s words, dated. Distinct from the
+// verdict, which is a judgement on the whole dish — these are the specifics,
+// and they&#x27;re what the chef learns the most from.
+function EditsLog({ recipe, onAdd, onRemove }) {
+  const [text, setText] = useState(&quot;&quot;);
+  const edits = Array.isArray(recipe.edits) ? recipe.edits : [];
+  const add = () =&gt; {
+    const body = text.trim();
+    if (!body) return;
+    onAdd(recipe.key, { id: &quot;e&quot; + uid(), date: localDateStr(), text: body });
+    setText(&quot;&quot;);
+  };
+  return (
+    &lt;div&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 7 }}&gt;
+        What you changed — the chef reads this
+      &lt;/div&gt;
+      {edits.length &gt; 0 &amp;&amp; (
+        &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 6, marginBottom: 10 }}&gt;
+          {edits.map((e) =&gt; (
+            &lt;div key={e.id} style={{ border: &quot;2px solid #D8D0BF&quot;, padding: &quot;8px 10px&quot;, display: &quot;flex&quot;, gap: 10, alignItems: &quot;flex-start&quot; }}&gt;
+              &lt;div style={{ flex: 1 }}&gt;
+                &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, color: &quot;#6E6759&quot;, letterSpacing: 0.4 }}&gt;{e.date}&lt;/div&gt;
+                &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6, marginTop: 3 }}&gt;{e.text}&lt;/div&gt;
+              &lt;/div&gt;
+              &lt;button onClick={() =&gt; onRemove(recipe.key, e.id)} title=&quot;Remove&quot; style={{
+                border: &quot;none&quot;, background: &quot;transparent&quot;, cursor: &quot;pointer&quot;, padding: &quot;0 2px&quot;,
+                fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 14, color: &quot;#A9A192&quot;,
+              }}&gt;×&lt;/button&gt;
+            &lt;/div&gt;
+          ))}
+        &lt;/div&gt;
+      )}
+      &lt;textarea
+        value={text}
+        onChange={(e) =&gt; setText(e.target.value)}
+        placeholder=&quot;cut the soy sauce by half and it was right / doubled the tofu for the protein&quot;
+        style={{
+          width: &quot;100%&quot;, minHeight: 54, border: &quot;2px solid #1B1B1B&quot;, padding: 10,
+          fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, resize: &quot;vertical&quot;,
+        }}
+      /&gt;
+      &lt;button onClick={add} style={{ ...btnGhost, marginTop: 8, padding: &quot;8px 14px&quot;, fontSize: 12 }}&gt;
+        Add edit
+      &lt;/button&gt;
+    &lt;/div&gt;
+  );
+}
+
+// The loop that keeps this from being a silo. A recipe from a named cook, made
+// and changed, is worth exactly the report the author asked for — so the app
+// writes it out and hands it over rather than letting it die in local storage.
+function ReportBack({ recipe }) {
+  const [copied, setCopied] = useState(false);
+  const src = recipe.source;
+  const edits = Array.isArray(recipe.edits) ? recipe.edits : [];
+  if (!src || src.kind === &quot;chef&quot; || !(src.url || &quot;&quot;).trim() || edits.length === 0) return null;
+
+  const text = `Made this${recipe.lastMade ? ` (${recipe.lastMade})` : &quot;&quot;}. What I changed: ` +
+    edits.map((e) =&gt; e.text.replace(/\s+$/, &quot;&quot;).replace(/\.$/, &quot;&quot;)).join(&quot;; &quot;) + &quot;.&quot; +
+    (recipe.verdict === &quot;loved&quot; ? &quot; Really good — will make again.&quot; :
+     recipe.verdict === &quot;never&quot; ? &quot; Didn&#x27;t work out for me, but posting the changes in case it helps.&quot; : &quot;&quot;);
+
+  const copy = async () =&gt; {
+    try {
+      if (navigator.clipboard &amp;&amp; navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement(&quot;textarea&quot;);
+        ta.value = text; ta.style.position = &quot;fixed&quot;; ta.style.opacity = &quot;0&quot;;
+        document.body.appendChild(ta); ta.select(); document.execCommand(&quot;copy&quot;);
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() =&gt; setCopied(false), 2200);
+    } catch (e) {}
+  };
+
+  return (
+    &lt;div style={{ border: &quot;2px solid #2F6B4F&quot;, background: &quot;#E5EDE4&quot;, padding: &quot;12px 14px&quot; }}&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#2F6B4F&quot;, marginBottom: 6 }}&gt;
+        Report back
+      &lt;/div&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
+        You changed {src.cook ? `${src.cook}&#x27;s` : &quot;this&quot;} recipe and it worked out. Saying what you changed is what the comments are for — it&#x27;s how the next person gets it right.
+      &lt;/div&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontStyle: &quot;italic&quot;, fontSize: 12, color: &quot;#1B1B1B&quot;, lineHeight: 1.6, marginTop: 8, borderLeft: &quot;2px solid #2F6B4F&quot;, paddingLeft: 10 }}&gt;
+        {text}
+      &lt;/div&gt;
+      &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginTop: 10, flexWrap: &quot;wrap&quot; }}&gt;
+        &lt;button onClick={copy} style={{ ...btnGhost, padding: &quot;8px 14px&quot;, fontSize: 12 }}&gt;
+          {copied ? &quot;Copied&quot; : &quot;Copy it&quot;}
+        &lt;/button&gt;
+        &lt;a href={src.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{
+          ...btnGhost, padding: &quot;8px 14px&quot;, fontSize: 12, textDecoration: &quot;none&quot;, display: &quot;inline-flex&quot;,
+        }}&gt;
+          Go and post it ↗
+        &lt;/a&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+// Who this kitchen is learning from. A list of names and links rather than a
+// closed drawer of recipes — the point is that it sends you back out.
+function Cooks({ recipes }) {
+  const cooks = useMemo(() =&gt; {
+    const map = new Map();
+    (recipes || []).forEach((r) =&gt; {
+      const src = r.source;
+      if (!src || src.kind === &quot;chef&quot; || !(src.cook || &quot;&quot;).trim()) return;
+      const name = src.cook.trim();
+      const hit = map.get(name) || { name, site: src.site || &quot;&quot;, url: src.url || &quot;&quot;, count: 0 };
+      hit.count += 1;
+      if (!hit.url &amp;&amp; src.url) hit.url = src.url;
+      if (!hit.site &amp;&amp; src.site) hit.site = src.site;
+      map.set(name, hit);
+    });
+    return [...map.values()].sort((a, b) =&gt; b.count - a.count);
+  }, [recipes]);
+
+  if (cooks.length === 0) return null;
+
+  return (
+    &lt;div style={{ border: &quot;2.5px solid #1B1B1B&quot;, background: &quot;#F9F6EE&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, padding: 16 }}&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot; }}&gt;
+        Cooking from
+      &lt;/div&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, marginTop: 4, marginBottom: 12, lineHeight: 1.5 }}&gt;
+        The people this kitchen is learning from.
+      &lt;/div&gt;
+      &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
+        {cooks.map((c) =&gt; (
+          &lt;div key={c.name} style={{ borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 8, display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;baseline&quot;, gap: 10 }}&gt;
+            &lt;div&gt;
+              &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13.5, fontWeight: 600, color: &quot;#1B1B1B&quot; }}&gt;{c.name}&lt;/div&gt;
+              {c.url ? (
+                &lt;a href={c.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#0043FF&quot; }}&gt;
+                  {c.site || &quot;open ↗&quot;}
+                &lt;/a&gt;
+              ) : c.site ? (
+                &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot; }}&gt;{c.site}&lt;/div&gt;
+              ) : null}
+            &lt;/div&gt;
+            &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot; }}&gt;
+              {c.count} recipe{c.count === 1 ? &quot;&quot; : &quot;s&quot;}
+            &lt;/div&gt;
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
   const stashed = loadChefDraft();
   const [request, setRequest] = useState((stashed &amp;&amp; stashed.request) || &quot;&quot;);
   const [scope, setScope] = useState((stashed &amp;&amp; stashed.scope) || &quot;prep&quot;);
@@ -3619,6 +4111,13 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
   const [draft, setDraft] = useState((stashed &amp;&amp; stashed.draft) || null);
   const [restored, setRestored] = useState(!!stashed);
   const [showList, setShowList] = useState(false);
+  const [mode, setMode] = useState(&quot;new&quot;);
+  const [paste, setPaste] = useState(&quot;&quot;);
+  const [cook, setCook] = useState(&quot;&quot;);
+  const [site, setSite] = useState(&quot;&quot;);
+  const [url, setUrl] = useState(&quot;&quot;);
+  const [upstream, setUpstream] = useState(&quot;&quot;);
+  const [importServings, setImportServings] = useState(&quot;&quot;);
   const boxRef = React.useRef(null);
 
   const stash = (d, req, sc, an) =&gt; {
@@ -3655,12 +4154,47 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
       const ask = body || (scope === &quot;meal&quot;
         ? &quot;Cook me one really good dinner tonight. Your call on what.&quot;
         : &quot;Build me this week&#x27;s prep. Your call on what.&quot;);
-      const result = await askChef(ask, buildChefSystem(recipes, scope, angle));
+      const result = await askChef(ask, buildChefSystem(recipes, scope, angle, rules));
       setDraft(result);
       stash(result, body, scope, angle);
     } catch (e) {
       setError(e.message === &quot;no-key&quot;
         ? &quot;This one needs your Anthropic API key — the key icon up top. Everything else in the app works without it.&quot;
+        : `Could not reach the chef: ${e.message}`);
+    }
+    setBusy(false);
+  };
+
+  // Bringing someone else&#x27;s recipe in. The attribution is captured from the
+  // form rather than trusted to the model, so a cook&#x27;s name can never be
+  // hallucinated onto a dish or quietly dropped in conversion.
+  const runImport = async () =&gt; {
+    const body = paste.trim();
+    if (!body) { setError(&quot;Paste the recipe first — ingredients and method.&quot;); return; }
+    if (!cook.trim()) { setError(&quot;Whose recipe is this? The name is the point.&quot;); return; }
+    setBusy(true); setError(null); setDraft(null); setRestored(false); setShowList(false);
+    try {
+      const want = Number(importServings) || (scope === &quot;meal&quot; ? 1 : 5);
+      const ask = `Convert this recipe for ${want} serving${want === 1 ? &quot;&quot; : &quot;s&quot;}. It is by ${cook.trim()}${site.trim() ? ` (${site.trim()})` : &quot;&quot;}${upstream.trim() ? `, who adapted it from ${upstream.trim()}` : &quot;&quot;}.\n\n${body}`;
+      const result = await askChef(ask, buildImportSystem(recipes, rules));
+      const withSource = {
+        ...result,
+        scope: scope === &quot;meal&quot; ? &quot;meal&quot; : &quot;prep&quot;,
+        servings: want,
+        source: {
+          kind: &quot;cook&quot;,
+          cook: cook.trim(),
+          site: site.trim(),
+          url: url.trim(),
+          upstream: upstream.trim(),
+          adaptations: Array.isArray(result.adaptations) ? result.adaptations.filter(Boolean) : [],
+        },
+      };
+      setDraft(withSource);
+      stash(withSource, body, scope, angle);
+    } catch (e) {
+      setError(e.message === &quot;no-key&quot;
+        ? &quot;This one needs your Anthropic API key — the key icon up top.&quot;
         : `Could not reach the chef: ${e.message}`);
     }
     setBusy(false);
@@ -3689,6 +4223,21 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
 
         &lt;div&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 7 }}&gt;
+            Where it comes from
+          &lt;/div&gt;
+          &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot; }}&gt;
+            &lt;Chip active={mode === &quot;new&quot;} onClick={() =&gt; { setMode(&quot;new&quot;); setError(null); }}&gt;The chef invents it&lt;/Chip&gt;
+            &lt;Chip active={mode === &quot;import&quot;} onClick={() =&gt; { setMode(&quot;import&quot;); setError(null); }}&gt;Bring in a cook&#x27;s recipe&lt;/Chip&gt;
+          &lt;/div&gt;
+          {mode === &quot;import&quot; &amp;&amp; (
+            &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, marginTop: 7, lineHeight: 1.55 }}&gt;
+              The chef fits it to this kitchen and says what it changed. The recipe stays theirs.
+            &lt;/div&gt;
+          )}
+        &lt;/div&gt;
+
+        &lt;div&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 7 }}&gt;
             Cooking what
           &lt;/div&gt;
           &lt;div style={{ display: &quot;flex&quot;, gap: 8 }}&gt;
@@ -3697,6 +4246,42 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
           &lt;/div&gt;
         &lt;/div&gt;
 
+        {mode === &quot;import&quot; &amp;&amp; (
+          &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 10 }}&gt;
+            &lt;textarea
+              value={paste}
+              onChange={(e) =&gt; setPaste(e.target.value)}
+              placeholder=&quot;paste the recipe — ingredients and method&quot;
+              style={{
+                width: &quot;100%&quot;, minHeight: 130, border: &quot;2px solid #1B1B1B&quot;, padding: 10,
+                fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, resize: &quot;vertical&quot;,
+              }}
+            /&gt;
+            &lt;input value={cook} onChange={(e) =&gt; setCook(e.target.value)} placeholder=&quot;whose recipe is it — e.g. Deb Perelman&quot;
+              style={importField} /&gt;
+            &lt;input value={site} onChange={(e) =&gt; setSite(e.target.value)} placeholder=&quot;where it&#x27;s published — e.g. Smitten Kitchen&quot;
+              style={importField} /&gt;
+            &lt;input value={url} onChange={(e) =&gt; setUrl(e.target.value)} placeholder=&quot;link to the original (optional, but it&#x27;s how you get back)&quot;
+              style={importField} /&gt;
+            &lt;input value={upstream} onChange={(e) =&gt; setUpstream(e.target.value)} placeholder=&quot;who they adapted it from, if they say (optional)&quot;
+              style={importField} /&gt;
+            &lt;input value={importServings} onChange={(e) =&gt; setImportServings(e.target.value)} placeholder=&quot;servings you want — blank uses the scope default&quot;
+              inputMode=&quot;numeric&quot; style={importField} /&gt;
+            &lt;button onClick={runImport} disabled={busy} style={{
+              ...btnPrimary, opacity: busy ? 0.6 : 1, justifyContent: &quot;center&quot;, padding: &quot;12px 16px&quot;,
+            }}&gt;
+              {busy ? &quot;Converting…&quot; : &quot;Bring it in&quot;}
+            &lt;/button&gt;
+            {error &amp;&amp; (
+              &lt;div style={{ border: &quot;2px solid #BE3B2A&quot;, background: &quot;#F9E4DE&quot;, padding: 12, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
+                {error}
+              &lt;/div&gt;
+            )}
+          &lt;/div&gt;
+        )}
+
+        {mode === &quot;new&quot; &amp;&amp; (
+        &lt;&gt;
         &lt;div&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 7 }}&gt;
             Starting point
@@ -3730,6 +4315,8 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed }) {
           &lt;div style={{ border: &quot;2px solid #BE3B2A&quot;, background: &quot;#F9E4DE&quot;, padding: 12, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
             {error}
           &lt;/div&gt;
+        )}
+        &lt;/&gt;
         )}
 
         {draft &amp;&amp; (
@@ -3809,7 +4396,7 @@ const DAY_STYLE = {
 
 const FAIL_REASONS = [&quot;Texture was wrong&quot;, &quot;Bland&quot;, &quot;Didn&#x27;t keep&quot;, &quot;Too much work&quot;, &quot;Just didn&#x27;t want it&quot;];
 
-function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
+function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rules, setRules }) {
   const [openKey, setOpenKey] = useState(null);
   const [showList, setShowList] = useState(null);
   const [failOpen, setFailOpen] = useState(false);
@@ -3843,6 +4430,17 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
 
   // A generated recipe becomes a first-class card: same shape, same storage,
   // so it progresses and gets grocery-listed like anything else.
+  const addEdit = (key, edit) =&gt; {
+    setRecipes((prev) =&gt; prev.map((r) =&gt; (
+      r.key === key ? { ...r, edits: [...(Array.isArray(r.edits) ? r.edits : []), edit] } : r
+    )));
+  };
+  const removeEdit = (key, editId) =&gt; {
+    setRecipes((prev) =&gt; prev.map((r) =&gt; (
+      r.key === key ? { ...r, edits: (Array.isArray(r.edits) ? r.edits : []).filter((e) =&gt; e.id !== editId) } : r
+    )));
+  };
+
   const saveGenerated = (draft, scope) =&gt; {
     const key = &quot;gen&quot; + Date.now();
     setRecipes((prev) =&gt; [...prev, {
@@ -3866,6 +4464,8 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
       verdict: null,
       verdictNote: &quot;&quot;,
       lastMade: null,
+      edits: [],
+      source: draft.source || { kind: &quot;chef&quot; },
     }]);
     setOpenKey(key);
     // The read-back check that used to live here now runs inside every write,
@@ -4042,7 +4642,11 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
         )}
       &lt;/div&gt;
 
-      &lt;ChefPanel recipes={recipes} onSave={saveGenerated} seed={seed} onSeedUsed={() =&gt; setSeed(null)} /&gt;
+      &lt;ChefPanel recipes={recipes} onSave={saveGenerated} seed={seed} onSeedUsed={() =&gt; setSeed(null)} rules={rules} /&gt;
+
+      &lt;KitchenRules rules={rules} setRules={setRules} /&gt;
+
+      &lt;Cooks recipes={recipes} /&gt;
 
       &lt;div style={{ background: &quot;#F9F6EE&quot;, border: &quot;2.5px solid #1B1B1B&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, padding: 18 }}&gt;
         &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot; }}&gt;
@@ -4114,6 +4718,7 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
                     Single meal
                   &lt;/span&gt;
                 )}
+                &lt;Provenance source={r.source} generated={r.generated} /&gt;
                 &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot; }}&gt;
                   {since == null ? &quot;not yet made&quot; : since === 0 ? &quot;made today&quot; : `${since}d ago`}
                 &lt;/span&gt;
@@ -4142,6 +4747,8 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
 
             {open &amp;&amp; (
               &lt;div style={{ borderTop: &quot;2px solid #1B1B1B&quot;, padding: 16, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 14 }}&gt;
+                &lt;SourceBlock source={r.source} /&gt;
+
                 &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
                   &lt;strong&gt;Veg:&lt;/strong&gt; {r.veg}&lt;br /&gt;
                   &lt;strong&gt;Sauce:&lt;/strong&gt; {r.sauce}
@@ -4222,6 +4829,10 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
                     }}
                   /&gt;
                 &lt;/div&gt;
+
+                &lt;EditsLog recipe={r} onAdd={addEdit} onRemove={removeEdit} /&gt;
+
+                &lt;ReportBack recipe={r} /&gt;
 
                 &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot; }}&gt;
                   {!isMeal &amp;&amp; (
