@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black" />
 <meta name="apple-mobile-web-app-title" content="Ledger" />
 <link rel="icon" href="./icon-192.png" sizes="192x192" />
+<link rel="icon" href="./icon-512.png" sizes="512x512" />
 <link rel="apple-touch-icon" href="./icon-192.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -17620,12 +17621,51 @@ function lsGet(key) {
         return null;
     }
 }
+// Human names for the storage keys, so a refused write can say which thing
+// didn't stick instead of "something went wrong".
+const STORAGE_LABELS = {
+    "sessions": "that session",
+    "plan": "that plan change",
+    "practice-entries": "that practice entry",
+    "exercises-config": "that exercise change",
+    "stretches-config": "that stretch change",
+    "recipes-config": "that recipe",
+    "meal-plan": "that meal plan change",
+    "sila": "that sila marker",
+    "log-draft": "the in-progress workout draft",
+};
+// A refused write is silent by default. setItem throws when the quota is full,
+// but it can also accept the call and store nothing, which is how a change can
+// sit on screen all evening and be gone in the morning. Kitchen used to be the
+// only place that checked, with its own timer at the one call site. The check
+// lives inside the write now, so every entry type gets it without having to
+// remember to ask for it.
+let storageListener = null;
+function onStorageFailure(fn) {
+    storageListener = fn;
+    return () => { if (storageListener === fn)
+        storageListener = null; };
+}
+function reportStorageFailure(key) {
+    const what = STORAGE_LABELS[key] || "that change";
+    // Deferred: several saves run inside a setState updater, and a React state
+    // setter must never fire synchronously from inside one.
+    setTimeout(() => { if (storageListener)
+        storageListener(what); }, 0);
+}
 function lsSet(key, value) {
     try {
         localStorage.setItem("ledger:" + key, value);
+        // Read it straight back. If what comes out isn't what went in, the change
+        // exists only in memory and will not survive a restart.
+        if (localStorage.getItem("ledger:" + key) !== value) {
+            reportStorageFailure(key);
+            return false;
+        }
         return true;
     }
     catch (e) {
+        reportStorageFailure(key);
         return false;
     }
 }
@@ -17828,7 +17868,10 @@ async function loadState() {
         const recipes = rc ? mergeRecipes(JSON.parse(rc.value)) : DEFAULT_RECIPES;
         const mp = lsGet("meal-plan");
         const mealPlan = mp ? JSON.parse(mp.value) : SEED_MEAL_PLAN;
+        const sl = lsGet("sila");
+        const sila = sl ? JSON.parse(sl.value) : {};
         return {
+            sila,
             sessions: s ? JSON.parse(s.value) : SEED_SESSIONS,
             plan: p ? mergePlan(JSON.parse(p.value)) : null,
             practice,
@@ -17839,7 +17882,7 @@ async function loadState() {
         };
     }
     catch (e) {
-        return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN };
+        return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN, sila: {} };
     }
 }
 async function saveSessions(sessions) { lsSet("sessions", JSON.stringify(sessions)); }
@@ -17849,6 +17892,7 @@ async function saveExercises(exercises) { lsSet("exercises-config", JSON.stringi
 async function saveStretches(stretches) { lsSet("stretches-config", JSON.stringify(stretches)); }
 async function saveRecipes(recipes) { lsSet("recipes-config", JSON.stringify(recipes)); }
 async function saveMealPlan(mealPlan) { lsSet("meal-plan", JSON.stringify(mealPlan)); }
+async function saveSila(sila) { lsSet("sila", JSON.stringify(sila)); }
 function getApiKey() {
     try {
         return localStorage.getItem("ledger:api-key") || "";
@@ -19138,12 +19182,51 @@ function practiceReadout(p) {
     }
     return parts.join(" · ");
 }
-function MindStep({ entry, setEntry }) {
+// Last few readings, side by side, shown while the current one is being chosen.
+// Deliberately just the readings: no counts, no majority, no "you've been
+// agitated lately". Two entries is enough for this to be worth looking at, and
+// it gets more informative on its own as the log fills, without ever needing to
+// claim a pattern.
+function RecentSits({ practice, limit = 5 }) {
+    const recent = (0, react_1.useMemo)(() => [...(practice || [])]
+        .filter((p) => p.energy || p.attitude)
+        .sort((a, b) => {
+        if (a.date !== b.date)
+            return (a.date || "") < (b.date || "") ? 1 : -1;
+        return (b.id || 0) - (a.id || 0);
+    })
+        .slice(0, limit), [practice, limit]);
+    if (recent.length === 0)
+        return null;
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const dayLabel = (ds) => {
+        if (!ds || ds.length < 10)
+            return "—";
+        const m = MONTHS[Number(ds.slice(5, 7)) - 1];
+        return m ? `${m} ${Number(ds.slice(8, 10))}` : "—";
+    };
+    const shortOf = (list, key) => {
+        const hit = list.find((x) => x.key === key);
+        return hit ? hit.short : "—";
+    };
+    return (react_1.default.createElement("div", { style: { border: "2px solid #D8D0BF", background: "#EFE9DC", padding: "10px 12px" } },
+        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 8 } }, recent.length === 1 ? "Last sit" : `Last ${recent.length} sits`),
+        react_1.default.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${recent.length}, 1fr)`, gap: 0 } }, recent.map((p, i) => (react_1.default.createElement("div", { key: p.id || i, style: {
+                paddingLeft: i === 0 ? 0 : 8,
+                borderLeft: i === 0 ? "none" : "1px solid #D8D0BF",
+            } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: "#6E6759", letterSpacing: 0.4, textTransform: "uppercase" } }, dayLabel(p.date)),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 600, color: "#1B1B1B", marginTop: 4, lineHeight: 1.3 } }, shortOf(MIND_ENERGY, p.energy)),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: "#6E6759", marginTop: 1, lineHeight: 1.3 } }, shortOf(MIND_ATTITUDE, p.attitude)))))),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: "#6E6759", lineHeight: 1.5, marginTop: 8 } }, "Context, not comparison \u2014 there's no better answer on either row.")));
+}
+function MindStep({ entry, setEntry, practice }) {
     return (react_1.default.createElement(Card, { title: "How was the mind?", sub: "Two readings, neither one a score" },
         react_1.default.createElement(Field, { label: "Energy" },
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MIND_ENERGY.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.energy === r.key, onClick: () => setEntry((e) => ({ ...e, energy: r.key })) }, r.label))))),
         react_1.default.createElement(Field, { label: "Attitude of the observing mind" },
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MIND_ATTITUDE.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.attitude === r.key, onClick: () => setEntry((e) => ({ ...e, attitude: r.key })) }, r.label))))),
+        react_1.default.createElement(RecentSits, { practice: practice }),
         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6, marginTop: 4 } }, "Slack asks for interest and energy next time; agitated asks for settling. Neither is a better sit.")));
 }
 function ReviewLine({ entry }) {
@@ -19154,7 +19237,7 @@ function ReviewLine({ entry }) {
         " \u00B7 ",
         a ? a.short : "No attitude noted"));
 }
-function PracticeWizard({ onCancel, onComplete }) {
+function PracticeWizard({ onCancel, onComplete, practice }) {
     const [step, setStep] = (0, react_1.useState)(0);
     const [entry, setEntry] = (0, react_1.useState)({
         date: localDateStr(),
@@ -19183,9 +19266,10 @@ function PracticeWizard({ onCancel, onComplete }) {
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MEDITATION_TYPES.map((t) => (react_1.default.createElement(Chip, { key: t.key, active: entry.type === t.key, onClick: () => setEntry((e) => ({ ...e, type: t.key })) }, t.label)))))),
         current === "duration" && (react_1.default.createElement(Card, { title: "Duration", sub: "How long did you sit?" },
             react_1.default.createElement(Stepper, { value: entry.duration, step: 5, unit: "min", min: 1, onChange: (v) => setEntry((e) => ({ ...e, duration: v })) }))),
-        current === "mind" && (react_1.default.createElement(MindStep, { entry: entry, setEntry: setEntry })),
+        current === "mind" && (react_1.default.createElement(MindStep, { entry: entry, setEntry: setEntry, practice: practice })),
         current === "journal" && (react_1.default.createElement(Card, { title: "Journal", sub: "Optional \u2014 whatever's worth writing down" },
             react_1.default.createElement(PointerPrompt, { type: entry.type }),
+            react_1.default.createElement(SilaJournalPrompt, null),
             react_1.default.createElement("textarea", { value: entry.journal, onChange: (ev) => setEntry((e) => ({ ...e, journal: ev.target.value })), placeholder: "What came up, what you noticed, anything on your mind\u2026", style: {
                     width: "100%", minHeight: 140, borderRadius: 0, border: "2px solid #1B1B1B",
                     padding: 12, fontFamily: "'Inter', sans-serif", fontSize: 14, resize: "vertical",
@@ -19317,9 +19401,157 @@ function pointerForDate(dateStr, pool, offset) {
         stride += 1;
     return pool[(((days * stride) % n) + n + (offset || 0)) % n];
 }
+// ---------- sila period (annual training period) ----------
+// Two months given over to the training precepts, September 1 to October 31,
+// every year. It is not a streak and there is nothing to score. The period does
+// three things: it names itself, it keeps the five precepts in view, and it
+// marks its own two edges — the day it opens and the day it closes. Both edges
+// are undertaken by hand rather than arriving automatically, because the point
+// of a marker is the deliberate act of making it.
+const SILA_START_MONTH = 9; // September
+const SILA_START_DAY = 1;
+const SILA_END_MONTH = 10; // October
+const SILA_END_DAY = 31;
+const PRECEPTS = [
+    {
+        n: 1,
+        short: "Harming",
+        text: "To refrain from killing or harming living beings.",
+        gloss: "Care for what is alive, including the small and the inconvenient.",
+    },
+    {
+        n: 2,
+        short: "Taking",
+        text: "To refrain from taking what is not given.",
+        gloss: "Not only property. Time, credit and attention can all be taken without being offered.",
+    },
+    {
+        n: 3,
+        short: "Sexuality",
+        text: "To refrain from sexual misconduct.",
+        gloss: "Not causing harm through sexuality; keeping faith with what has been promised.",
+    },
+    {
+        n: 4,
+        short: "Speech",
+        text: "To refrain from false speech.",
+        gloss: "The plain lie, and also the exaggeration, the convenient omission, the version that flatters.",
+    },
+    {
+        n: 5,
+        short: "Heedlessness",
+        text: "To refrain from intoxicants that cloud the mind.",
+        gloss: "The one that guards the other four: clouded, they all get harder to keep.",
+    },
+];
+// A separate subpool, kept out of PRACTICE_POINTERS so it can be weighted
+// differently. Each pointer names the precept it belongs to, which is what the
+// Today band highlights — precept 0 means the training as a whole.
+const SILA_POINTERS = [
+    { theme: "Sila", text: "Virtue is not a rule you obey. It is a way of not adding to the trouble.", source: null, precept: 0 },
+    { theme: "Sila", text: "The precepts are undertaken, not imposed. Notice the difference in how that feels.", source: null, precept: 0 },
+    { theme: "Sila", text: "Sila, samadhi, panna — conduct first, because an agitated conscience will not sit still.", source: null, precept: 0 },
+    { theme: "Sila", text: "A precept kept is not a good deed done. It is a source of remorse removed.", source: "after AN 11.1", precept: 0 },
+    { theme: "Sila", text: "Where a precept was broken, the practice is to see it clearly and take it up again. Not to make a case for the defence.", source: null, precept: 0 },
+    { theme: "Sila", text: "Keeping a precept for a day teaches you more about the impulse than a year of agreeing with it in principle.", source: null, precept: 0 },
+    { theme: "Sila", text: "Attention without discernment is not yet right mindfulness. Conduct is where the discernment shows.", source: "after B. Alan Wallace", precept: 0 },
+    { theme: "Harming", text: "Watch for the small cruelty that costs you nothing — the swat, the dismissal, the impatience with something slow.", source: null, precept: 1 },
+    { theme: "Harming", text: "Harm usually starts as irritation. Catch it there and the precept keeps itself.", source: null, precept: 1 },
+    { theme: "Harming", text: "Non-harming includes the way you speak to yourself about a bad sit.", source: null, precept: 1 },
+    { theme: "Taking", text: "What did you take today that wasn't offered? Time, attention, the last of something.", source: null, precept: 2 },
+    { theme: "Taking", text: "The impulse to take is easier to see than the taking. Watch for the reaching.", source: null, precept: 2 },
+    { theme: "Taking", text: "Generosity is the same precept read forwards instead of backwards.", source: null, precept: 2 },
+    { theme: "Sexuality", text: "Where does desire ask you to be less than honest with someone?", source: null, precept: 3 },
+    { theme: "Sexuality", text: "The question is not whether wanting arises. It is what the wanting talks you into.", source: null, precept: 3 },
+    { theme: "Sexuality", text: "Restraint here is care for another person's trust, not a verdict on the body.", source: null, precept: 3 },
+    { theme: "Speech", text: "Is it true, is it kind, is it the right time? Three filters, and most speech fails the third.", source: "after MN 58", precept: 4 },
+    { theme: "Speech", text: "The lie you tell to look slightly better is the one worth catching. It is the most frequent.", source: null, precept: 4 },
+    { theme: "Speech", text: "Silence is available. Notice how rarely it gets considered.", source: null, precept: 4 },
+    { theme: "Speech", text: "Exaggeration is false speech wearing a friendly face.", source: null, precept: 4 },
+    { theme: "Heedlessness", text: "What do you reach for when you don't want to feel what's here?", source: null, precept: 5 },
+    { theme: "Heedlessness", text: "Heedlessness is the actual object of this precept. The substance is only the usual route to it.", source: null, precept: 5 },
+    { theme: "Heedlessness", text: "Notice the hour of the day when clarity is worth the least to you. That's the hour this precept is about.", source: null, precept: 5 },
+    { theme: "Heedlessness", text: "The scroll, the second drink, the noise left on. Different doors, same room.", source: null, precept: 5 },
+];
+// Is this date inside the period, and where in it? Returns null outside.
+function silaPeriod(dateStr) {
+    if (!dateStr || dateStr.length < 10)
+        return null;
+    const year = Number(dateStr.slice(0, 4));
+    if (!Number.isFinite(year))
+        return null;
+    const pad = (n) => String(n).padStart(2, "0");
+    const start = `${year}-${pad(SILA_START_MONTH)}-${pad(SILA_START_DAY)}`;
+    const end = `${year}-${pad(SILA_END_MONTH)}-${pad(SILA_END_DAY)}`;
+    if (dateStr < start || dateStr > end)
+        return null;
+    const DAY = 86400000;
+    const t0 = Date.parse(start + "T00:00:00");
+    const t1 = Date.parse(end + "T00:00:00");
+    const tn = Date.parse(dateStr + "T00:00:00");
+    if (!Number.isFinite(t0) || !Number.isFinite(tn))
+        return null;
+    const dayIndex = Math.round((tn - t0) / DAY);
+    return {
+        year, start, end, dayIndex,
+        dayNumber: dayIndex + 1,
+        totalDays: Math.round((t1 - t0) / DAY) + 1,
+        isOpeningDay: dayIndex === 0,
+        isClosingDay: dateStr === end,
+    };
+}
+// During the period the daily pointer leans hard on the precepts without
+// crowding the rest out: two days in three come from the sila subpool, the
+// third from the general library, so insight practice stays interwoven rather
+// than being suspended for two months.
+// Same coprime-stride walk as pointerForDate, but driven by a caller-supplied
+// ordinal instead of the raw date.
+function pointerFromPool(pool, ordinal) {
+    const n = pool.length;
+    if (n === 0)
+        return null;
+    const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
+    let stride = 17;
+    while (gcd(stride, n) !== 1)
+        stride += 1;
+    return pool[(((ordinal * stride) % n) + n) % n];
+}
+function dailyPointerFor(dateStr, type, offset) {
+    const period = silaPeriod(dateStr);
+    const off = offset || 0;
+    if (period && ((period.dayIndex + off) % 3) !== 2) {
+        // Count sila days rather than calendar days. Only two days in three land
+        // here, and a date-driven index walking a fixed stride can never reach a
+        // third of the pool once that pattern is imposed on it — eight pointers
+        // would simply never appear. The ordinal counts the days that actually use
+        // this pool, and the year term keeps next September from repeating this one.
+        const d = period.dayIndex + off;
+        const ordinal = Math.floor(d / 3) * 2 + (d % 3) + period.year * 11;
+        const p = pointerFromPool(SILA_POINTERS, ordinal);
+        if (p)
+            return p;
+    }
+    // The interwoven third still indexes by date, which is fine only because the
+    // general pool's length isn't a multiple of 3. If it ever becomes one, this
+    // line starts showing a third of the library and hiding the rest — give it
+    // the same ordinal treatment as above.
+    return pointerForDate(dateStr, pointerPool(type), off);
+}
+// The precept the band highlights. When today's pointer is a sila one it names
+// its own precept, so the highlight and the day's inspiration agree. On the
+// interwoven days the pointer is a general one, and the precepts simply rotate.
+function preceptOfDay(dateStr) {
+    const period = silaPeriod(dateStr);
+    if (!period)
+        return null;
+    const p = dailyPointerFor(dateStr, null, 0);
+    if (p && p.precept)
+        return p.precept;
+    return (period.dayIndex % PRECEPTS.length) + 1;
+}
 function DailyPointer() {
     const [offset, setOffset] = (0, react_1.useState)(0);
-    const p = pointerForDate(localDateStr(), pointerPool(null), offset);
+    const p = dailyPointerFor(localDateStr(), null, offset);
     if (!p)
         return null;
     return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "16px 18px" } },
@@ -19398,8 +19630,7 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
                 react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
                     react_1.default.createElement("button", { onClick: () => setConfirmId(null), style: { ...btnGhost, flex: 1, justifyContent: "center", padding: "8px 12px", fontSize: 12.5 } }, "Keep it"),
                     react_1.default.createElement("button", { onClick: () => { setConfirmId(null); onDeleteEntry(p.id); }, style: { ...btnPrimary, background: "#BE3B2A", flex: 1, justifyContent: "center", padding: "8px 12px", fontSize: 12.5 } }, "Delete")))),
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#6E6759", marginTop: 8 } },
-                practiceReadout(p)),
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#6E6759", marginTop: 8 } }, practiceReadout(p)),
             p.journal && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#1B1B1B", marginTop: 8, lineHeight: 1.6, fontStyle: "italic" } },
                 "\"",
                 p.journal,
@@ -19420,6 +19651,8 @@ function App() {
     const [stretches, setStretches] = (0, react_1.useState)(STRETCHES);
     const [recipes, setRecipes] = (0, react_1.useState)(DEFAULT_RECIPES);
     const [mealPlan, setMealPlan] = (0, react_1.useState)([]);
+    const [sila, setSila] = (0, react_1.useState)({});
+    const [saveWarning, setSaveWarning] = (0, react_1.useState)(null);
     const [showSettings, setShowSettings] = (0, react_1.useState)(false);
     const [apiKeyInput, setApiKeyInput] = (0, react_1.useState)("");
     const [hasKey, setHasKey] = (0, react_1.useState)(false);
@@ -19429,7 +19662,7 @@ function App() {
         setDraft(loadDraft());
     }, []);
     (0, react_1.useEffect)(() => {
-        loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp }) => {
+        loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp, sila: sl }) => {
             setSessions(s);
             if (p)
                 setPlan(p);
@@ -19438,6 +19671,7 @@ function App() {
             setStretches(st || STRETCHES);
             setRecipes(rc || DEFAULT_RECIPES);
             setMealPlan(mp || []);
+            setSila(sl || {});
             setLoaded(true);
         });
     }, []);
@@ -19459,6 +19693,16 @@ function App() {
         setMealPlan((prev) => {
             const next = typeof updater === "function" ? updater(prev) : updater;
             saveMealPlan(next);
+            return next;
+        });
+    }, []);
+    // One subscriber for every refused write in the app. The write layer names
+    // the thing that didn't stick; this puts it on screen once, wherever he is.
+    (0, react_1.useEffect)(() => onStorageFailure((what) => setSaveWarning(what)), []);
+    const updateSila = (0, react_1.useCallback)((updater) => {
+        setSila((prev) => {
+            const next = typeof updater === "function" ? updater(prev) : updater;
+            saveSila(next);
             return next;
         });
     }, []);
@@ -19560,13 +19804,19 @@ function App() {
                     fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5,
                     fontWeight: 600, letterSpacing: 0.8, textTransform: "uppercase",
                 } }, t.label))))),
+            saveWarning && (react_1.default.createElement("div", { style: { border: "3px solid #BE3B2A", background: "#F9E4DE", padding: 14, marginBottom: 22 } },
+                react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, fontWeight: 600, letterSpacing: 1.4, textTransform: "uppercase", color: "#BE3B2A", marginBottom: 6 } }, "Not saved"),
+                react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } },
+                    saveWarning.charAt(0).toUpperCase() + saveWarning.slice(1),
+                    " is showing here but did not write to storage, so it will not survive a restart. Your phone's storage for this app is probably full \u2014 export from the Plan tab, then tell me."),
+                react_1.default.createElement("button", { onClick: () => setSaveWarning(null), style: { ...btnGhost, marginTop: 10, padding: "8px 14px", fontSize: 12 } }, "Dismiss"))),
             !logging && !practiceLogging && draft && (react_1.default.createElement("div", { style: { border: "3px solid #1B1B1B", background: "#FFC400", padding: 14, marginBottom: 22 } },
                 react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, fontWeight: 600, letterSpacing: 1.4, textTransform: "uppercase", color: "#1B1B1B", marginBottom: 6 } }, "Unfinished workout"),
                 react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#1B1B1B", lineHeight: 1.55, marginBottom: 12 } }, draftSummary(draft)),
                 react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
                     react_1.default.createElement("button", { onClick: () => setLogging(true), style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Resume"),
                     react_1.default.createElement("button", { onClick: () => { clearDraft(); setDraft(null); }, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Discard")))),
-            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); } })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice })),
+            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice })),
             toast && (react_1.default.createElement("div", { style: {
                     position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
                     background: "#1B1B1B", color: "#F9F6EE", padding: "10px 20px", borderRadius: 0,
@@ -19577,7 +19827,94 @@ function App() {
                 " ",
                 toast)))));
 }
-function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCHES, setStretches, onStartLog }) {
+// During the period, the day's precept sits directly above the journal field —
+// close enough that answering it is the path of least resistance, and worded as
+// a question about the day rather than a box to tick.
+function SilaJournalPrompt() {
+    const today = localDateStr();
+    const period = silaPeriod(today);
+    if (!period)
+        return null;
+    const n = preceptOfDay(today);
+    const precept = PRECEPTS.find((x) => x.n === n);
+    if (!precept)
+        return null;
+    return (react_1.default.createElement("div", { style: { border: "2px solid #1B1B1B", background: "#F9F6EE", padding: "10px 12px", marginBottom: 12 } },
+        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 6 } },
+            "Sila period \u00B7 Day ",
+            period.dayNumber,
+            " of ",
+            period.totalDays),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: "#1B1B1B", lineHeight: 1.5 } }, precept.text),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6, marginTop: 6 } }, "Where was this easy today, and where did it ask something of you?")));
+}
+// The band on Today. It names the period, holds the five precepts in view with
+// the day's one picked out, and carries the two markers.
+function SilaBand({ sila, setSila }) {
+    const today = localDateStr();
+    const period = silaPeriod(today);
+    if (!period)
+        return null;
+    const record = (sila && sila[period.year]) || {};
+    const opened = record.opened || null;
+    const closed = record.closed || null;
+    const activeN = preceptOfDay(today);
+    const pointer = dailyPointerFor(today, null, 0);
+    const isSilaPointer = !!(pointer && pointer.precept !== undefined);
+    const activePrecept = PRECEPTS.find((x) => x.n === activeN);
+    const mark = (field) => setSila((prev) => {
+        const base = prev || {};
+        return { ...base, [period.year]: { ...(base[period.year] || {}), [field]: today } };
+    });
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const stamp = (ds) => {
+        if (!ds || ds.length < 10)
+            return "";
+        const m = MONTHS[Number(ds.slice(5, 7)) - 1];
+        return m ? `${m} ${Number(ds.slice(8, 10))}` : ds;
+    };
+    const headline = !opened
+        ? (period.isOpeningDay ? "Opens today" : "Not yet undertaken")
+        : closed ? "Closed"
+            : period.isClosingDay ? "Closes today"
+                : `Day ${period.dayNumber}`;
+    return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: 20 } },
+        react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1.4, textTransform: "uppercase", color: "#6E6759" } }, "Sila period"),
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759" } },
+                "Day ",
+                period.dayNumber,
+                " / ",
+                period.totalDays)),
+        react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 26, fontWeight: 800, letterSpacing: -0.9, textTransform: "uppercase", color: "#1B1B1B", margin: "4px 0 14px" } }, headline),
+        react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 0, border: "2px solid #1B1B1B" } }, PRECEPTS.map((pr, i) => {
+            const on = pr.n === activeN;
+            return (react_1.default.createElement("div", { key: pr.n, style: {
+                    display: "flex", gap: 10, alignItems: "flex-start",
+                    padding: "8px 10px",
+                    borderTop: i === 0 ? "none" : "1px solid #D8D0BF",
+                    background: on ? "#1B1B1B" : "#F9F6EE",
+                    color: on ? "#F9F6EE" : "#1B1B1B",
+                } },
+                react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, opacity: on ? 0.7 : 0.55, flex: "0 0 auto", paddingTop: 1 } }, pr.n),
+                react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, lineHeight: 1.5, fontWeight: on ? 600 : 400 } },
+                    pr.text,
+                    on && (react_1.default.createElement("div", { style: { fontSize: 12, fontWeight: 400, opacity: 0.75, marginTop: 4, lineHeight: 1.55 } }, pr.gloss)))));
+        })),
+        isSilaPointer && (react_1.default.createElement("div", { style: { marginTop: 12 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 5 } }, "Today"),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, pointer.text),
+            pointer.source && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 6 } }, pointer.source)))),
+        !opened ? (react_1.default.createElement("button", { onClick: () => mark("opened"), style: { ...btnPrimary, background: "#0043FF", color: "#F9F6EE", marginTop: 16 } }, "Undertake the period")) : !closed && period.isClosingDay ? (react_1.default.createElement(react_1.default.Fragment, null,
+            react_1.default.createElement("button", { onClick: () => mark("closed"), style: { ...btnPrimary, background: "#0043FF", color: "#F9F6EE", marginTop: 16 } }, "Close the period"),
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 8 } },
+                "Undertaken ",
+                stamp(opened)))) : (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 14 } },
+            "Undertaken ",
+            stamp(opened),
+            closed ? ` · closed ${stamp(closed)}` : ""))));
+}
+function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCHES, setStretches, onStartLog, sila, setSila }) {
     const todayStr = localDateStr();
     const todaysSession = sessions.find((s) => s.date === todayStr);
     const nextType = (0, react_1.useMemo)(() => {
@@ -19636,6 +19973,7 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
             react_1.default.createElement("button", { onClick: onStartLog, style: { ...btnPrimary, background: "#F9F6EE", color: "#1B1B1B", marginTop: 18 } },
                 "Log today's session ",
                 react_1.default.createElement(ChevronRight, { size: 16 }))))),
+        react_1.default.createElement(SilaBand, { sila: sila, setSila: setSila }),
         (coach.rest.flag || coach.stretchFreq.flag || coach.balance.flag) && (react_1.default.createElement("div", { style: { background: "#E5EDE4", border: "2px solid #2F6B4F", borderRadius: 0, padding: 20 } },
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#2F6B4F", marginBottom: 6 } }, "Recovery & mobility"),
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
@@ -20018,7 +20356,6 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
     const [failNote, setFailNote] = (0, react_1.useState)("");
     const [seed, setSeed] = (0, react_1.useState)(null);
     const [filter, setFilter] = (0, react_1.useState)("all");
-    const [saveWarning, setSaveWarning] = (0, react_1.useState)(null);
     const [confirmDelete, setConfirmDelete] = (0, react_1.useState)(null);
     const today = localDateStr();
     const thisWeek = prepWeekOf(today);
@@ -20065,19 +20402,8 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
                 lastMade: null,
             }]);
         setOpenKey(key);
-        // Storage can refuse a write — a full quota is the usual reason — and it
-        // does so silently, which is how a recipe can sit in the list all evening
-        // and be gone in the morning. Read it back and say so if it didn't stick.
-        setTimeout(() => {
-            try {
-                const raw = lsGet("recipes-config");
-                const ok = raw && JSON.parse(raw.value).some((r) => r.key === key);
-                setSaveWarning(ok ? null : "That recipe is showing here but did not write to storage, so it will not survive a restart. Your phone's storage for this app is probably full — export from the Plan tab, then tell me.");
-            }
-            catch (e) {
-                setSaveWarning("Could not confirm that recipe saved. Export from the Plan tab before closing the app.");
-            }
-        }, 60);
+        // The read-back check that used to live here now runs inside every write,
+        // so a refused save is caught for recipes and everything else alike.
     };
     const deleteRecipe = (key) => {
         setRecipes((prev) => prev.filter((r) => r.key !== key));
@@ -20138,10 +20464,6 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions }) {
     const techniques = cooked.filter((r) => r.technique).length;
     const shown = recipes.filter((r) => filter === "all" || (filter === "meal" ? r.scope === "meal" : r.scope !== "meal"));
     return (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 16 } },
-        saveWarning && (react_1.default.createElement("div", { style: { border: "3px solid #BE3B2A", background: "#F9E4DE", padding: 14 } },
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, fontWeight: 600, letterSpacing: 1.4, textTransform: "uppercase", color: "#BE3B2A", marginBottom: 6 } }, "Not saved"),
-            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } }, saveWarning),
-            react_1.default.createElement("button", { onClick: () => setSaveWarning(null), style: { ...btnGhost, marginTop: 10, padding: "8px 14px", fontSize: 12 } }, "Dismiss"))),
         react_1.default.createElement("div", { style: { background: "#1B1B1B", color: "#F9F6EE", padding: 22, boxShadow: "6px 6px 0 #75695A" } },
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1.4, textTransform: "uppercase", opacity: 0.65 } }, "This week"),
             current ? (react_1.default.createElement(react_1.default.Fragment, null,
