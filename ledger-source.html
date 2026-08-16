@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string and into a kitchen-rules storage key, seeded from the eight constraints that were previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, with the raw note kept verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations), both preserved through mergeRecipes. Edits are folded into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that converts a named cook's recipe to this kitchen via buildImportSystem, with attribution captured from the form rather than the model. A Cooks panel lists who the kitchen is learning from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette rules unchanged: blue #0043FF action only, yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette rules unchanged: blue #0043FF action only, yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -3592,6 +3592,43 @@ You did not write this recipe and you are not replacing its author. Your job is 
 const CHEF_IMPORT_JSON = `Respond with ONLY a JSON object, no markdown fence, no preamble. Same shape as a generated recipe plus &quot;adaptations&quot;. Omit any grocery department where nothing is bought:
 {&quot;name&quot;:&quot;&quot;,&quot;scope&quot;:&quot;meal&quot;,&quot;servings&quot;:1,&quot;cuisine&quot;:&quot;&quot;,&quot;protein&quot;:&quot;&quot;,&quot;grain&quot;:&quot;&quot;,&quot;veg&quot;:&quot;&quot;,&quot;sauce&quot;:&quot;&quot;,&quot;proteinG&quot;:0,&quot;fiberG&quot;:0,&quot;activeMinutes&quot;:0,&quot;prepNotes&quot;:&quot;&quot;,&quot;technique&quot;:&quot;&quot;,&quot;adaptations&quot;:[&quot;halved the butter&quot;],&quot;ingredients&quot;:[&quot;2 lbs boneless chicken thighs&quot;],&quot;method&quot;:[{&quot;t&quot;:&quot;step title&quot;,&quot;d&quot;:&quot;step detail&quot;}],&quot;grocery&quot;:{&quot;produce&quot;:[],&quot;meatSeafood&quot;:[],&quot;deli&quot;:[],&quot;dairy&quot;:[],&quot;bakery&quot;:[],&quot;cannedJarred&quot;:[],&quot;dryGoods&quot;:[],&quot;spices&quot;:[],&quot;frozen&quot;:[],&quot;other&quot;:[],&quot;notes&quot;:&quot;&quot;}}`;
 
+// Reading the page rather than being handed a clean recipe: the author&#x27;s name,
+// the publication, and the upstream source all have to come off the page, and
+// the comment thread is worth mining because it is the one thing a generated
+// recipe has no equivalent of — dozens of people reporting what actually
+// happened when they cooked it.
+const CHEF_URL_IMPORT = `You are reading a recipe page on the web and bringing the recipe into this kitchen.
+
+FIRST, from the page itself, identify:
+- &quot;cook&quot;: the person who wrote this recipe. Their actual name, as the page gives it. If the page only shows a handle or a site name, use that. Never guess a name that is not on the page — leave it empty instead.
+- &quot;site&quot;: the name of the publication or blog it appears on.
+- &quot;upstream&quot;: if the author says they adapted it from someone else — another cook, a cookbook — record that as &quot;Name, Source&quot;. Empty if they don&#x27;t say.
+- &quot;commentNotes&quot;: if the page has a comment thread, read it. Pull out only what is repeated by several independent people or confirmed by the author, and only where it would change how the dish is cooked — a consistent complaint that it comes out too salty, a substitution many people report working, a step that catches people out. Two or three short lines at most. Empty array if the comments say nothing useful or there are none.
+
+THEN convert the recipe for this kitchen:
+- Keep the dish recognisably the same dish. Do not redesign it, do not rename it, and do not substitute the thing that makes it what it is.
+- Apply the kitchen&#x27;s constraints above only where they genuinely conflict with the original. Leaving the recipe alone is a valid outcome.
+- Scale to the servings asked for and recalculate quantities honestly.
+- Put every change you made into &quot;adaptations&quot; as short plain lines. Empty array if you changed nothing.
+- If what the comments report contradicts the recipe as written, follow the recipe but say so in &quot;adaptations&quot; or &quot;commentNotes&quot; — don&#x27;t silently overrule the author.
+- The &quot;technique&quot; note should teach the craft the original author was using, not one you prefer.
+- Estimate protein and fiber per serving honestly. If the dish does not reach the protein target, say so in &quot;adaptations&quot; rather than padding it with an ingredient the author never used.
+
+If the page turns out not to contain a recipe, return {&quot;error&quot;:&quot;no recipe on that page&quot;} and nothing else.`;
+
+const CHEF_URL_JSON = `Respond with ONLY a JSON object, no markdown fence, no preamble. Omit any grocery department where nothing is bought:
+{&quot;name&quot;:&quot;&quot;,&quot;cook&quot;:&quot;&quot;,&quot;site&quot;:&quot;&quot;,&quot;upstream&quot;:&quot;&quot;,&quot;commentNotes&quot;:[&quot;several people found it too salty with regular soy sauce&quot;],&quot;scope&quot;:&quot;meal&quot;,&quot;servings&quot;:1,&quot;cuisine&quot;:&quot;&quot;,&quot;protein&quot;:&quot;&quot;,&quot;grain&quot;:&quot;&quot;,&quot;veg&quot;:&quot;&quot;,&quot;sauce&quot;:&quot;&quot;,&quot;proteinG&quot;:0,&quot;fiberG&quot;:0,&quot;activeMinutes&quot;:0,&quot;prepNotes&quot;:&quot;&quot;,&quot;technique&quot;:&quot;&quot;,&quot;adaptations&quot;:[&quot;halved the butter&quot;],&quot;ingredients&quot;:[&quot;2 lbs boneless chicken thighs&quot;],&quot;method&quot;:[{&quot;t&quot;:&quot;step title&quot;,&quot;d&quot;:&quot;step detail&quot;}],&quot;grocery&quot;:{&quot;produce&quot;:[],&quot;meatSeafood&quot;:[],&quot;deli&quot;:[],&quot;dairy&quot;:[],&quot;bakery&quot;:[],&quot;cannedJarred&quot;:[],&quot;dryGoods&quot;:[],&quot;spices&quot;:[],&quot;frozen&quot;:[],&quot;other&quot;:[],&quot;notes&quot;:&quot;&quot;}}`;
+
+function buildUrlImportSystem(recipes, rules) {
+  return [
+    CHEF_OPENING,
+    rulesBlock(rules),
+    CHEF_URL_IMPORT,
+    kitchenHistory(recipes),
+    CHEF_URL_JSON,
+  ].filter(Boolean).join(&quot;\n\n&quot;);
+}
+
 function buildImportSystem(recipes, rules) {
   return [
     CHEF_OPENING,
@@ -3601,6 +3638,70 @@ function buildImportSystem(recipes, rules) {
     CHEF_IMPORT_JSON,
   ].filter(Boolean).join(&quot;\n\n&quot;);
 }
+
+// The recipe page is fetched by the API itself rather than by the app. A
+// browser can&#x27;t fetch smittenkitchen.com from a page served off github.io —
+// CORS forbids it — and a proxy would be one more thing to break. The web
+// fetch tool runs server-side during the request, and it will only touch a URL
+// that already appeared in the conversation, which here means the one pasted
+// into the box.
+async function askChefUrl(request, system, url) {
+  const key = getApiKey();
+  if (!key) throw new Error(&quot;no-key&quot;);
+  const response = await fetch(&quot;https://api.anthropic.com/v1/messages&quot;, {
+    method: &quot;POST&quot;,
+    headers: {
+      &quot;Content-Type&quot;: &quot;application/json&quot;,
+      &quot;x-api-key&quot;: key,
+      &quot;anthropic-version&quot;: &quot;2023-06-01&quot;,
+      &quot;anthropic-dangerous-direct-browser-access&quot;: &quot;true&quot;,
+    },
+    body: JSON.stringify({
+      model: &quot;claude-sonnet-4-6&quot;,
+      max_tokens: 3000,
+      system,
+      tools: [{
+        type: &quot;web_fetch_20250910&quot;,
+        name: &quot;web_fetch&quot;,
+        max_uses: 3,
+        // Recipe blogs run long — comment threads on a popular post can be
+        // hundreds of entries. The recipe sits well above them, so truncation
+        // costs nothing and keeps a single import from burning tokens.
+        max_content_tokens: 30000,
+      }],
+      messages: [{ role: &quot;user&quot;, content: request }],
+    }),
+  });
+  if (!response.ok) throw new Error(`API error ${response.status}`);
+  const data = await response.json();
+  const blocks = data.content || [];
+
+  // A failed fetch comes back as a 200 with the error inside the body, so the
+  // only way to tell the cook something useful is to go looking for it.
+  const fetchError = blocks
+    .filter((c) =&gt; c.type === &quot;web_fetch_tool_result&quot;)
+    .map((c) =&gt; c.content &amp;&amp; c.content.error_code)
+    .find(Boolean);
+
+  const text = blocks.filter((c) =&gt; c.type === &quot;text&quot;).map((c) =&gt; c.text).join(&quot;&quot;);
+  const cleaned = text.replace(/```json/g, &quot;&quot;).replace(/```/g, &quot;&quot;).trim();
+  const first = cleaned.indexOf(&quot;{&quot;);
+  const last = cleaned.lastIndexOf(&quot;}&quot;);
+  if (first &lt; 0 || last &lt; 0) {
+    if (fetchError) throw new Error(&quot;fetch:&quot; + fetchError);
+    throw new Error(&quot;Could not read a recipe from that page.&quot;);
+  }
+  return JSON.parse(cleaned.slice(first, last + 1));
+}
+
+const FETCH_ERRORS = {
+  url_not_accessible: &quot;That page wouldn&#x27;t load — it may be down, or behind a login.&quot;,
+  url_not_allowed: &quot;That site doesn&#x27;t allow automated fetching.&quot;,
+  unsupported_content_type: &quot;That link isn&#x27;t a web page or PDF.&quot;,
+  url_too_long: &quot;That link is too long to fetch.&quot;,
+  too_many_requests: &quot;Rate limited — wait a minute and try again.&quot;,
+  invalid_tool_input: &quot;That doesn&#x27;t look like a valid link.&quot;,
+};
 
 async function askChef(request, system) {
   const key = getApiKey();
@@ -3933,6 +4034,16 @@ function SourceBlock({ source }) {
           Open the original ↗
         &lt;/a&gt;
       )}
+      {Array.isArray(source.commentNotes) &amp;&amp; source.commentNotes.length &gt; 0 &amp;&amp; (
+        &lt;div style={{ marginTop: 10, borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 8 }}&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 5 }}&gt;
+            What other cooks reported
+          &lt;/div&gt;
+          {source.commentNotes.map((c, i) =&gt; (
+            &lt;div key={i} style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;· {c}&lt;/div&gt;
+          ))}
+        &lt;/div&gt;
+      )}
       {Array.isArray(source.adaptations) &amp;&amp; source.adaptations.length &gt; 0 &amp;&amp; (
         &lt;div style={{ marginTop: 10, borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 8 }}&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 5 }}&gt;
@@ -4113,10 +4224,8 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
   const [showList, setShowList] = useState(false);
   const [mode, setMode] = useState(&quot;new&quot;);
   const [paste, setPaste] = useState(&quot;&quot;);
-  const [cook, setCook] = useState(&quot;&quot;);
-  const [site, setSite] = useState(&quot;&quot;);
+  const [showPaste, setShowPaste] = useState(false);
   const [url, setUrl] = useState(&quot;&quot;);
-  const [upstream, setUpstream] = useState(&quot;&quot;);
   const [importServings, setImportServings] = useState(&quot;&quot;);
   const boxRef = React.useRef(null);
 
@@ -4165,37 +4274,54 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
     setBusy(false);
   };
 
-  // Bringing someone else&#x27;s recipe in. The attribution is captured from the
-  // form rather than trusted to the model, so a cook&#x27;s name can never be
-  // hallucinated onto a dish or quietly dropped in conversion.
+  // Bringing someone else&#x27;s recipe in. One link is the whole input: the page is
+  // read server-side, and the author, the publication, whoever they adapted it
+  // from, and anything useful buried in the comments all come off the page
+  // rather than being typed in by hand. The paste box stays as a fallback for
+  // pages the fetcher can&#x27;t read — anything rendered by JavaScript, or behind a
+  // login.
   const runImport = async () =&gt; {
+    const link = url.trim();
     const body = paste.trim();
-    if (!body) { setError(&quot;Paste the recipe first — ingredients and method.&quot;); return; }
-    if (!cook.trim()) { setError(&quot;Whose recipe is this? The name is the point.&quot;); return; }
+    if (!link &amp;&amp; !body) { setError(&quot;Paste the link to the recipe.&quot;); return; }
     setBusy(true); setError(null); setDraft(null); setRestored(false); setShowList(false);
+    const want = Number(importServings) || (scope === &quot;meal&quot; ? 1 : 5);
     try {
-      const want = Number(importServings) || (scope === &quot;meal&quot; ? 1 : 5);
-      const ask = `Convert this recipe for ${want} serving${want === 1 ? &quot;&quot; : &quot;s&quot;}. It is by ${cook.trim()}${site.trim() ? ` (${site.trim()})` : &quot;&quot;}${upstream.trim() ? `, who adapted it from ${upstream.trim()}` : &quot;&quot;}.\n\n${body}`;
-      const result = await askChef(ask, buildImportSystem(recipes, rules));
+      let result;
+      if (link) {
+        const ask = `Fetch this recipe page and bring the recipe into this kitchen, scaled to ${want} serving${want === 1 ? &quot;&quot; : &quot;s&quot;}: ${link}`;
+        result = await askChefUrl(ask, buildUrlImportSystem(recipes, rules), link);
+      } else {
+        const ask = `Convert this recipe for ${want} serving${want === 1 ? &quot;&quot; : &quot;s&quot;}.\n\n${body}`;
+        result = await askChef(ask, buildImportSystem(recipes, rules));
+      }
+      if (result.error) { setError(`The chef couldn&#x27;t find a recipe there — ${result.error}.`); setBusy(false); return; }
       const withSource = {
         ...result,
         scope: scope === &quot;meal&quot; ? &quot;meal&quot; : &quot;prep&quot;,
         servings: want,
         source: {
           kind: &quot;cook&quot;,
-          cook: cook.trim(),
-          site: site.trim(),
-          url: url.trim(),
-          upstream: upstream.trim(),
+          cook: (result.cook || &quot;&quot;).trim(),
+          site: (result.site || &quot;&quot;).trim(),
+          url: link,
+          upstream: (result.upstream || &quot;&quot;).trim(),
           adaptations: Array.isArray(result.adaptations) ? result.adaptations.filter(Boolean) : [],
+          commentNotes: Array.isArray(result.commentNotes) ? result.commentNotes.filter(Boolean) : [],
         },
       };
       setDraft(withSource);
       stash(withSource, body, scope, angle);
     } catch (e) {
-      setError(e.message === &quot;no-key&quot;
-        ? &quot;This one needs your Anthropic API key — the key icon up top.&quot;
-        : `Could not reach the chef: ${e.message}`);
+      const msg = String(e.message || &quot;&quot;);
+      setError(
+        msg === &quot;no-key&quot;
+          ? &quot;This one needs your Anthropic API key — the key icon up top.&quot;
+          : msg.startsWith(&quot;fetch:&quot;)
+            ? `${FETCH_ERRORS[msg.slice(6)] || &quot;That page couldn&#x27;t be read.&quot;} You can paste the recipe text in instead.`
+            : `Could not reach the chef: ${msg}`
+      );
+      if (msg.startsWith(&quot;fetch:&quot;)) setShowPaste(true);
     }
     setBusy(false);
   };
@@ -4248,29 +4374,46 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
 
         {mode === &quot;import&quot; &amp;&amp; (
           &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 10 }}&gt;
-            &lt;textarea
-              value={paste}
-              onChange={(e) =&gt; setPaste(e.target.value)}
-              placeholder=&quot;paste the recipe — ingredients and method&quot;
-              style={{
-                width: &quot;100%&quot;, minHeight: 130, border: &quot;2px solid #1B1B1B&quot;, padding: 10,
-                fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, resize: &quot;vertical&quot;,
-              }}
+            &lt;input
+              value={url}
+              onChange={(e) =&gt; setUrl(e.target.value)}
+              placeholder=&quot;paste the link to the recipe&quot;
+              inputMode=&quot;url&quot;
+              style={importField}
             /&gt;
-            &lt;input value={cook} onChange={(e) =&gt; setCook(e.target.value)} placeholder=&quot;whose recipe is it — e.g. Deb Perelman&quot;
-              style={importField} /&gt;
-            &lt;input value={site} onChange={(e) =&gt; setSite(e.target.value)} placeholder=&quot;where it&#x27;s published — e.g. Smitten Kitchen&quot;
-              style={importField} /&gt;
-            &lt;input value={url} onChange={(e) =&gt; setUrl(e.target.value)} placeholder=&quot;link to the original (optional, but it&#x27;s how you get back)&quot;
-              style={importField} /&gt;
-            &lt;input value={upstream} onChange={(e) =&gt; setUpstream(e.target.value)} placeholder=&quot;who they adapted it from, if they say (optional)&quot;
-              style={importField} /&gt;
-            &lt;input value={importServings} onChange={(e) =&gt; setImportServings(e.target.value)} placeholder=&quot;servings you want — blank uses the scope default&quot;
-              inputMode=&quot;numeric&quot; style={importField} /&gt;
+            &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, lineHeight: 1.55 }}&gt;
+              The chef reads the page — who wrote it, who they adapted it from, and what the comments say went wrong for people.
+            &lt;/div&gt;
+            &lt;input
+              value={importServings}
+              onChange={(e) =&gt; setImportServings(e.target.value)}
+              placeholder=&quot;servings — blank uses the scope default&quot;
+              inputMode=&quot;numeric&quot;
+              style={importField}
+            /&gt;
+
+            {showPaste ? (
+              &lt;textarea
+                value={paste}
+                onChange={(e) =&gt; setPaste(e.target.value)}
+                placeholder=&quot;paste the recipe text here instead&quot;
+                style={{
+                  width: &quot;100%&quot;, minHeight: 130, border: &quot;2px solid #1B1B1B&quot;, padding: 10,
+                  fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, resize: &quot;vertical&quot;,
+                }}
+              /&gt;
+            ) : (
+              &lt;button onClick={() =&gt; setShowPaste(true)} style={{
+                ...btnGhost, padding: &quot;8px 12px&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, border: &quot;2px solid #D8D0BF&quot;, alignSelf: &quot;flex-start&quot;,
+              }}&gt;
+                No link? Paste the text instead
+              &lt;/button&gt;
+            )}
+
             &lt;button onClick={runImport} disabled={busy} style={{
               ...btnPrimary, opacity: busy ? 0.6 : 1, justifyContent: &quot;center&quot;, padding: &quot;12px 16px&quot;,
             }}&gt;
-              {busy ? &quot;Converting…&quot; : &quot;Bring it in&quot;}
+              {busy ? &quot;Reading the page…&quot; : &quot;Bring it in&quot;}
             &lt;/button&gt;
             {error &amp;&amp; (
               &lt;div style={{ border: &quot;2px solid #BE3B2A&quot;, background: &quot;#F9E4DE&quot;, padding: 12, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
@@ -4327,6 +4470,41 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
             &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 18, fontWeight: 800, letterSpacing: -0.4, color: &quot;#1B1B1B&quot;, lineHeight: 1.15 }}&gt;
               {draft.name}
             &lt;/div&gt;
+
+            {draft.source &amp;&amp; draft.source.kind === &quot;cook&quot; &amp;&amp; (
+              &lt;div style={{ border: &quot;2px solid #1B1B1B&quot;, padding: 12, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
+                &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;
+                  Read off the page — fix it if it&#x27;s wrong
+                &lt;/div&gt;
+                &lt;input
+                  value={draft.source.cook || &quot;&quot;}
+                  onChange={(e) =&gt; setDraft({ ...draft, source: { ...draft.source, cook: e.target.value } })}
+                  placeholder=&quot;whose recipe is it&quot;
+                  style={importField}
+                /&gt;
+                &lt;input
+                  value={draft.source.site || &quot;&quot;}
+                  onChange={(e) =&gt; setDraft({ ...draft, source: { ...draft.source, site: e.target.value } })}
+                  placeholder=&quot;where it&#x27;s published&quot;
+                  style={importField}
+                /&gt;
+                {(draft.source.upstream || &quot;&quot;).trim() &amp;&amp; (
+                  &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, lineHeight: 1.55 }}&gt;
+                    They adapted it from {draft.source.upstream}
+                  &lt;/div&gt;
+                )}
+                {Array.isArray(draft.source.commentNotes) &amp;&amp; draft.source.commentNotes.length &gt; 0 &amp;&amp; (
+                  &lt;div style={{ borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 8 }}&gt;
+                    &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 5 }}&gt;
+                      What the comments say
+                    &lt;/div&gt;
+                    {draft.source.commentNotes.map((c, i) =&gt; (
+                      &lt;div key={i} style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;· {c}&lt;/div&gt;
+                    ))}
+                  &lt;/div&gt;
+                )}
+              &lt;/div&gt;
+            )}
             &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11 }}&gt;
               &lt;span style={{ background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;{draft.proteinG}g protein&lt;/span&gt;
               &lt;span style={{ color: &quot;#6E6759&quot;, marginLeft: 8 }}&gt;{draft.activeMinutes} min active&lt;/span&gt;
@@ -4367,7 +4545,7 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
               &lt;/&gt;
             )}
             &lt;div style={{ display: &quot;flex&quot;, gap: 8 }}&gt;
-              &lt;button onClick={() =&gt; { onSave(draft, scope); setDraft(null); setRestored(false); setRequest(&quot;&quot;); setShowList(false); stash(null); }} style={{ ...btnPrimary, flex: 1, justifyContent: &quot;center&quot; }}&gt;
+              &lt;button onClick={() =&gt; { onSave(draft, scope); setDraft(null); setRestored(false); setRequest(&quot;&quot;); setPaste(&quot;&quot;); setUrl(&quot;&quot;); setShowPaste(false); setShowList(false); stash(null); }} style={{ ...btnPrimary, flex: 1, justifyContent: &quot;center&quot; }}&gt;
                 Save to rotation
               &lt;/button&gt;
               &lt;button onClick={run} disabled={busy} style={{ ...btnGhost, flex: &quot;0 0 auto&quot;, justifyContent: &quot;center&quot; }}&gt;
