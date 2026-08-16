@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette rules unchanged: blue #0043FF action only, yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. Output ceilings are 8000 for import and 6000 for generation, raised after a truncated reply surfaced as a raw JSON.parse error; truncated and unreadable replies are distinguished and phrased via CHEF_ERRORS, and a pause_turn stop reason is resumed by handing the assistant turn back, up to three turns. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette rules unchanged: blue #0043FF action only, yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -3648,7 +3648,8 @@ function buildImportSystem(recipes, rules) {
 async function askChefUrl(request, system, url) {
   const key = getApiKey();
   if (!key) throw new Error(&quot;no-key&quot;);
-  const response = await fetch(&quot;https://api.anthropic.com/v1/messages&quot;, {
+
+  const call = (messages) =&gt; fetch(&quot;https://api.anthropic.com/v1/messages&quot;, {
     method: &quot;POST&quot;,
     headers: {
       &quot;Content-Type&quot;: &quot;application/json&quot;,
@@ -3658,7 +3659,11 @@ async function askChefUrl(request, system, url) {
     },
     body: JSON.stringify({
       model: &quot;claude-sonnet-4-6&quot;,
-      max_tokens: 3000,
+      // An imported recipe runs longer than a generated one — it carries the
+      // adaptations, what the comments turned up, and the chef&#x27;s own narration
+      // of the fetch, all of which count as output. At 3000 this ran out
+      // mid-array and the JSON came back unclosed.
+      max_tokens: 8000,
       system,
       tools: [{
         type: &quot;web_fetch_20250910&quot;,
@@ -3669,12 +3674,30 @@ async function askChefUrl(request, system, url) {
         // costs nothing and keeps a single import from burning tokens.
         max_content_tokens: 30000,
       }],
-      messages: [{ role: &quot;user&quot;, content: request }],
+      messages,
     }),
   });
-  if (!response.ok) throw new Error(`API error ${response.status}`);
-  const data = await response.json();
-  const blocks = data.content || [];
+
+  let messages = [{ role: &quot;user&quot;, content: request }];
+  let blocks = [];
+  let stop = null;
+
+  // A server-side fetch can take long enough that the API returns early with
+  // stop_reason &quot;pause_turn&quot;, expecting the conversation handed straight back
+  // so it can carry on. Without this the reply arrives half-finished and looks
+  // exactly like a malformed recipe.
+  for (let turn = 0; turn &lt; 3; turn++) {
+    const response = await call(messages);
+    if (!response.ok) throw new Error(`API error ${response.status}`);
+    const data = await response.json();
+    blocks = blocks.concat(data.content || []);
+    stop = data.stop_reason;
+    if (stop === &quot;pause_turn&quot;) {
+      messages = messages.concat([{ role: &quot;assistant&quot;, content: data.content }]);
+      continue;
+    }
+    break;
+  }
 
   // A failed fetch comes back as a 200 with the error inside the body, so the
   // only way to tell the cook something useful is to go looking for it.
@@ -3682,17 +3705,29 @@ async function askChefUrl(request, system, url) {
     .filter((c) =&gt; c.type === &quot;web_fetch_tool_result&quot;)
     .map((c) =&gt; c.content &amp;&amp; c.content.error_code)
     .find(Boolean);
+  if (fetchError) throw new Error(&quot;fetch:&quot; + fetchError);
 
   const text = blocks.filter((c) =&gt; c.type === &quot;text&quot;).map((c) =&gt; c.text).join(&quot;&quot;);
   const cleaned = text.replace(/```json/g, &quot;&quot;).replace(/```/g, &quot;&quot;).trim();
   const first = cleaned.indexOf(&quot;{&quot;);
   const last = cleaned.lastIndexOf(&quot;}&quot;);
   if (first &lt; 0 || last &lt; 0) {
-    if (fetchError) throw new Error(&quot;fetch:&quot; + fetchError);
+    if (stop === &quot;max_tokens&quot;) throw new Error(&quot;truncated&quot;);
     throw new Error(&quot;Could not read a recipe from that page.&quot;);
   }
-  return JSON.parse(cleaned.slice(first, last + 1));
+  try {
+    return JSON.parse(cleaned.slice(first, last + 1));
+  } catch (e) {
+    // Unclosed JSON almost always means the reply was cut off rather than that
+    // the chef wrote something invalid, so say the useful thing.
+    throw new Error(stop === &quot;max_tokens&quot; ? &quot;truncated&quot; : &quot;unreadable&quot;);
+  }
 }
+
+const CHEF_ERRORS = {
+  truncated: &quot;That recipe came back longer than the chef had room for. Try it with fewer servings, or paste the recipe text in instead.&quot;,
+  unreadable: &quot;The chef&#x27;s reply came back garbled. Worth trying once more.&quot;,
+};
 
 const FETCH_ERRORS = {
   url_not_accessible: &quot;That page wouldn&#x27;t load — it may be down, or behind a login.&quot;,
@@ -3716,7 +3751,9 @@ async function askChef(request, system) {
     },
     body: JSON.stringify({
       model: &quot;claude-sonnet-4-6&quot;,
-      max_tokens: 2000,
+      // A five-serving prep with a full grocery list gets close to the old
+      // 2000 ceiling; the imported path hit exactly that wall.
+      max_tokens: 6000,
       system,
       messages: [{ role: &quot;user&quot;, content: request }],
     }),
@@ -3727,8 +3764,14 @@ async function askChef(request, system) {
   const cleaned = text.replace(/```json/g, &quot;&quot;).replace(/```/g, &quot;&quot;).trim();
   const first = cleaned.indexOf(&quot;{&quot;);
   const last = cleaned.lastIndexOf(&quot;}&quot;);
-  if (first &lt; 0 || last &lt; 0) throw new Error(&quot;Could not read a recipe from the response.&quot;);
-  return JSON.parse(cleaned.slice(first, last + 1));
+  if (first &lt; 0 || last &lt; 0) {
+    throw new Error(data.stop_reason === &quot;max_tokens&quot; ? &quot;truncated&quot; : &quot;Could not read a recipe from the response.&quot;);
+  }
+  try {
+    return JSON.parse(cleaned.slice(first, last + 1));
+  } catch (e) {
+    throw new Error(data.stop_reason === &quot;max_tokens&quot; ? &quot;truncated&quot; : &quot;unreadable&quot;);
+  }
 }
 
 const importField = {
@@ -4267,9 +4310,10 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
       setDraft(result);
       stash(result, body, scope, angle);
     } catch (e) {
-      setError(e.message === &quot;no-key&quot;
+      const msg = String(e.message || &quot;&quot;);
+      setError(msg === &quot;no-key&quot;
         ? &quot;This one needs your Anthropic API key — the key icon up top. Everything else in the app works without it.&quot;
-        : `Could not reach the chef: ${e.message}`);
+        : CHEF_ERRORS[msg] || `Could not reach the chef: ${msg}`);
     }
     setBusy(false);
   };
@@ -4319,9 +4363,9 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
           ? &quot;This one needs your Anthropic API key — the key icon up top.&quot;
           : msg.startsWith(&quot;fetch:&quot;)
             ? `${FETCH_ERRORS[msg.slice(6)] || &quot;That page couldn&#x27;t be read.&quot;} You can paste the recipe text in instead.`
-            : `Could not reach the chef: ${msg}`
+            : CHEF_ERRORS[msg] || `Could not reach the chef: ${msg}`
       );
-      if (msg.startsWith(&quot;fetch:&quot;)) setShowPaste(true);
+      if (msg.startsWith(&quot;fetch:&quot;) || msg === &quot;truncated&quot;) setShowPaste(true);
     }
     setBusy(false);
   };
