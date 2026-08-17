@@ -17580,7 +17580,7 @@ const COMPLETION_OPTIONS = [
     { key: "skipped", label: "Skipped" },
 ];
 const FEEL_OPTIONS = [
-    { key: "easy", label: "Easy — ready to progress", color: "#0043FF" },
+    { key: "easy", label: "Easy — ready to progress", color: "var(--activity)" },
     { key: "solid", label: "Solid, stay here", color: "#1B1B1B" },
     { key: "hard", label: "Tough but completed", color: "#BE3B2A" },
     { key: "struggled", label: "Struggled / dropped weight", color: "#BE3B2A" },
@@ -17633,6 +17633,7 @@ const STORAGE_LABELS = {
     "meal-plan": "that meal plan change",
     "sila": "that sila marker",
     "kitchen-rules": "that kitchen rule",
+    "theme": "that colour change",
     "log-draft": "the in-progress workout draft",
 };
 // A refused write is silent by default. setItem throws when the quota is full,
@@ -18726,7 +18727,7 @@ function computeCoachSummary(sessions, exercises, plan, sessionType, allStretche
 function StepDots({ step, total }) {
     return (react_1.default.createElement("div", { style: { display: "flex", gap: 6, justifyContent: "center", margin: "18px 0" } }, Array.from({ length: total }).map((_, i) => (react_1.default.createElement("div", { key: i, style: {
             width: i === step ? 20 : 6, height: 6, borderRadius: 0,
-            background: i === step ? "#0043FF" : "#1B1B1B",
+            background: i === step ? "var(--activity)" : "#1B1B1B",
             transition: "all .25s ease"
         } })))));
 }
@@ -18734,8 +18735,8 @@ function Chip({ active, onClick, children, color }) {
     return (react_1.default.createElement("button", { onClick: onClick, style: {
             padding: "10px 16px",
             borderRadius: 0,
-            border: `1.5px solid ${active ? (color || "#0043FF") : "#1B1B1B"}`,
-            background: active ? (color || "#0043FF") : "#F9F6EE",
+            border: `1.5px solid ${active ? (color || "var(--activity)") : "#1B1B1B"}`,
+            background: active ? (color || "var(--activity)") : "#F9F6EE",
             color: active ? "#F9F6EE" : "#1B1B1B",
             fontFamily: "'Inter', sans-serif",
             fontSize: 14,
@@ -18817,8 +18818,8 @@ const stampStyle = {
 // typewriter italics rather than a script face.
 const annotationStyle = {
     fontFamily: "'IBM Plex Mono', monospace", fontStyle: "italic", fontSize: 12,
-    color: "#0043FF", marginTop: 10, lineHeight: 1.55,
-    borderLeft: "3px solid #0043FF", paddingLeft: 9,
+    color: "var(--activity)", marginTop: 10, lineHeight: 1.55,
+    borderLeft: "3px solid var(--activity)", paddingLeft: 9,
 };
 // ---------- log wizard ----------
 function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, onCancel, onComplete }) {
@@ -18916,8 +18917,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                         setEntry((e) => ({ ...e, modality: m.key, distance: target.distance, duration: target.duration }));
                     } }, m.label))))),
             react_1.default.createElement("div", { style: {
-                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#0043FF", lineHeight: 1.6,
-                    background: "#E4E9FF", border: "2px solid #0043FF", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
+                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "var(--activity)", lineHeight: 1.6,
+                    background: "var(--activity-tint)", border: "2px solid var(--activity)", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
                 } },
                 "Coach: ",
                 cardioTarget.rationale),
@@ -18941,8 +18942,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                 react_1.default.createElement(Stepper, { value: entry.hrMax, step: 1, unit: "bpm", onChange: (v) => setEntry((e) => ({ ...e, hrMax: v })) })))),
         current === "warmup" && (react_1.default.createElement(Card, { title: "Movement Prep", sub: "Before lifting \u00B7 about 3 minutes" },
             react_1.default.createElement("div", { style: {
-                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#0043FF", lineHeight: 1.6,
-                    background: "#E4E9FF", border: "2px solid #0043FF", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
+                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "var(--activity)", lineHeight: 1.6,
+                    background: "var(--activity-tint)", border: "2px solid var(--activity)", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
                 } }, "Coach: dynamic movement before lifting primes the muscles you're about to load. Save the long static holds for after \u2014 held cold, they temporarily reduce strength output."),
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, WARMUP.map((w) => (react_1.default.createElement("div", { key: w.key, style: { borderTop: "1px solid #D8D0BF", paddingTop: 8 } },
                 react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13.5, color: "#1B1B1B" } }, w.label),
@@ -18952,8 +18953,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
         plannedExercises.includes(current) && (react_1.default.createElement(ExerciseStep, { exKey: current, sessions: sessions, exercises: exercises, entry: entry, setExercise: setExercise, onSkip: () => skipExercise(current) })),
         current === "stretches" && (react_1.default.createElement(Card, { title: "Stretch Routine", sub: `After training, while warm · Session ${entry.type} emphasis` },
             react_1.default.createElement("div", { style: {
-                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#0043FF", lineHeight: 1.6,
-                    background: "#E4E9FF", border: "2px solid #0043FF", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
+                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "var(--activity)", lineHeight: 1.6,
+                    background: "var(--activity-tint)", border: "2px solid var(--activity)", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
                 } },
                 "Coach: rounds build toward roughly ",
                 STRETCH_TARGET_ACCUM,
@@ -18964,7 +18965,7 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                 return (react_1.default.createElement("div", { key: s.key, style: { borderTop: "1px solid #D8D0BF", paddingTop: 10 } },
                     react_1.default.createElement("div", { style: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 } },
                         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 14, color: "#1B1B1B" } }, s.label),
-                        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#0043FF" } },
+                        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--activity)" } },
                             s.holdSeconds,
                             "s",
                             s.perSide ? "/side" : "",
@@ -18977,8 +18978,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                     react_1.default.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" } }, [0, 1, 2, 3].map((r) => (react_1.default.createElement("button", { key: r, onClick: () => setEntry((e) => ({ ...e, stretchRounds: { ...e.stretchRounds, [s.key]: r } })), style: {
                             padding: "6px 12px", borderRadius: 0, fontSize: 12, cursor: "pointer",
                             fontFamily: "'Inter', sans-serif",
-                            border: `1.5px solid ${val === r ? "#0043FF" : "#1B1B1B"}`,
-                            background: val === r ? "#0043FF" : "#F9F6EE",
+                            border: `1.5px solid ${val === r ? "var(--activity)" : "#1B1B1B"}`,
+                            background: val === r ? "var(--activity)" : "#F9F6EE",
                             color: val === r ? "#F9F6EE" : "#1B1B1B",
                         } }, r === 0 ? "skipped" : `${r} round${r === 1 ? "" : "s"}`))))));
             })))),
@@ -19052,8 +19053,8 @@ function ExerciseStep({ exKey, sessions, exercises, entry, setExercise, onSkip }
     const showWeight = rec?.weight != null;
     return (react_1.default.createElement(Card, { title: cfg.label, sub: showWeight ? `Planned: ${rec?.weight ?? "—"}${cfg.unit} × ${rec?.sets ?? cfg.targetSets}×${rec?.reps ?? cfg.targetReps}` : `Planned: ${rec?.reps ?? cfg.targetReps} reps / side` },
         rec?.rationale && (react_1.default.createElement("div", { style: {
-                fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#0043FF", lineHeight: 1.6,
-                background: "#E4E9FF", border: "2px solid #0043FF", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
+                fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "var(--activity)", lineHeight: 1.6,
+                background: "var(--activity-tint)", border: "2px solid var(--activity)", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
             } },
             "Coach: ",
             rec.rationale)),
@@ -19126,12 +19127,12 @@ function ProgressionLadder({ sessions, exKey, exercises }) {
     return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "18px 20px" } },
         react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 } },
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#1B1B1B" } }, cfg.label),
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: "#0043FF", fontWeight: 600 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: "var(--activity)", fontWeight: 600 } },
                 data[data.length - 1].weight,
                 cfg.unit)),
-        react_1.default.createElement(Sparkline, { data: data.map((d) => d.weight), width: 340, height: 64, color: "#0043FF" })));
+        react_1.default.createElement(Sparkline, { data: data.map((d) => d.weight), width: 340, height: 64, color: "var(--activity)" })));
 }
-function Sparkline({ data, width = 300, height = 60, color = "#0043FF" }) {
+function Sparkline({ data, width = 300, height = 60, color = "var(--activity)" }) {
     if (!data || data.length === 0)
         return null;
     const min = Math.min(...data);
@@ -19460,6 +19461,47 @@ The note describes something learned while cooking. Convert it into ONE instruct
 
 Respond with ONLY a JSON object, no markdown fence, no preamble:
 {"text":"","why":""}`;
+// ---------- activity colour ----------
+// One accent carries everything that is the cook's own doing: the weight
+// sparkline, the minutes sat, the frame around a recipe being brought in, and
+// their handwriting in the annotation style. Links out are not that — going to
+// someone else's site is ink now — and neither is rejection, which keeps its
+// own red.
+//
+// The candidates live here rather than in a stylesheet so the whole set can be
+// tried against real data on the phone. The two reds are worth watching: brick
+// #BE3B2A is rejection, and an orange that drifts too close to it makes "the
+// weight I lifted" and "never again" the same colour at a glance.
+const ACTIVITY_THEMES = [
+    { key: "blue", label: "Blue", note: "What's there now", color: "#0043FF", tint: "#E4E9FF" },
+    { key: "sienna", label: "Burnt sienna", note: "Earth pigment, mid weight", color: "#A6522C", tint: "#F3E3D8" },
+    { key: "umber", label: "Burnt umber", note: "Darkest, furthest from the red", color: "#8A4A22", tint: "#F0E3D6" },
+    { key: "ember", label: "Ember", note: "Brightest, closest to the red", color: "#C0632A", tint: "#F7E7D9" },
+];
+function themeByKey(key) {
+    return ACTIVITY_THEMES.find((t) => t.key === key) || ACTIVITY_THEMES[0];
+}
+function applyTheme(key) {
+    const t = themeByKey(key);
+    try {
+        document.documentElement.style.setProperty("--activity", t.color);
+        document.documentElement.style.setProperty("--activity-tint", t.tint);
+    }
+    catch (e) { }
+    return t.key;
+}
+// Read and apply before React paints, so the app never flashes an unset
+// variable on launch.
+function loadThemeKey() {
+    try {
+        const raw = lsGet("theme");
+        return raw ? themeByKey(JSON.parse(raw.value)).key : "blue";
+    }
+    catch (e) {
+        return "blue";
+    }
+}
+async function saveThemeKey(key) { lsSet("theme", JSON.stringify(key)); }
 // ---------- sila period (annual training period) ----------
 // Two months given over to the training precepts, September 1 to October 31,
 // every year. It is not a streak and there is nothing to score. The period does
@@ -19660,10 +19702,10 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
                 react_1.default.createElement("button", { onClick: () => { setEditingId(editingId === p.id ? null : p.id); setConfirmId(null); }, title: "Tap to change the date", style: {
                         border: "none", background: "transparent", padding: "0 0 2px", cursor: "pointer", textAlign: "left",
                         fontFamily: "'Archivo', sans-serif", fontWeight: 600, fontSize: 15, color: "#1B1B1B",
-                        borderBottom: editingId === p.id ? "2px solid #0043FF" : "2px dotted #A9A192",
+                        borderBottom: editingId === p.id ? "2px solid var(--activity)" : "2px dotted #A9A192",
                     } }, p.date),
                 react_1.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" } },
-                    react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#0043FF" } },
+                    react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--activity)" } },
                         p.duration,
                         " min"),
                     react_1.default.createElement("button", { onClick: () => { setConfirmId(confirmId === p.id ? null : p.id); setEditingId(null); }, "aria-label": "Delete entry", title: "Delete entry", style: {
@@ -19712,6 +19754,7 @@ function App() {
     const [mealPlan, setMealPlan] = (0, react_1.useState)([]);
     const [sila, setSila] = (0, react_1.useState)({});
     const [kitchenRules, setKitchenRules] = (0, react_1.useState)(SEED_RULES);
+    const [themeKey, setThemeKeyState] = (0, react_1.useState)(loadThemeKey);
     const [saveWarning, setSaveWarning] = (0, react_1.useState)(null);
     const [showSettings, setShowSettings] = (0, react_1.useState)(false);
     const [apiKeyInput, setApiKeyInput] = (0, react_1.useState)("");
@@ -19760,6 +19803,10 @@ function App() {
     // One subscriber for every refused write in the app. The write layer names
     // the thing that didn't stick; this puts it on screen once, wherever he is.
     (0, react_1.useEffect)(() => onStorageFailure((what) => setSaveWarning(what)), []);
+    const setThemeKey = (0, react_1.useCallback)((key) => {
+        setThemeKeyState(applyTheme(key));
+        saveThemeKey(key);
+    }, []);
     const updateKitchenRules = (0, react_1.useCallback)((updater) => {
         setKitchenRules((prev) => {
             const next = typeof updater === "function" ? updater(prev) : updater;
@@ -19850,7 +19897,7 @@ function App() {
                         react_1.default.createElement("span", { style: { color: "#6E6759", marginLeft: 8 } }, "Flexible / Strong / Lean"))),
                 react_1.default.createElement("button", { onClick: () => setShowSettings(true), style: {
                         width: 34, height: 34, borderRadius: 0, border: "2.5px solid #1B1B1B", background: "#F9F6EE", boxShadow: "6px 6px 0 #1B1B1B",
-                        display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: hasKey ? "#0043FF" : "#BE3B2A",
+                        display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: hasKey ? "var(--activity)" : "#BE3B2A",
                     }, title: hasKey ? "API key set" : "Set API key for AI features" },
                     react_1.default.createElement(Key, { size: 16 }))),
             showSettings && (react_1.default.createElement("div", { style: {
@@ -19884,7 +19931,7 @@ function App() {
                 react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
                     react_1.default.createElement("button", { onClick: () => setLogging(true), style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Resume"),
                     react_1.default.createElement("button", { onClick: () => { clearDraft(); setDraft(null); }, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Discard")))),
-            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice })),
+            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan })) : (react_1.default.createElement(PlanTab, { themeKey: themeKey, setThemeKey: setThemeKey, plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice })),
             toast && (react_1.default.createElement("div", { style: {
                     position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
                     background: "#1B1B1B", color: "#F9F6EE", padding: "10px 20px", borderRadius: 0,
@@ -19973,8 +20020,8 @@ function SilaBand({ sila, setSila }) {
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 5 } }, "Today"),
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, pointer.text),
             pointer.source && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 6 } }, pointer.source)))),
-        !opened ? (react_1.default.createElement("button", { onClick: () => mark("opened"), style: { ...btnPrimary, background: "#0043FF", color: "#F9F6EE", marginTop: 16 } }, "Undertake the period")) : !closed && period.isClosingDay ? (react_1.default.createElement(react_1.default.Fragment, null,
-            react_1.default.createElement("button", { onClick: () => mark("closed"), style: { ...btnPrimary, background: "#0043FF", color: "#F9F6EE", marginTop: 16 } }, "Close the period"),
+        !opened ? (react_1.default.createElement("button", { onClick: () => mark("opened"), style: { ...btnPrimary, background: "var(--activity)", color: "#F9F6EE", marginTop: 16 } }, "Undertake the period")) : !closed && period.isClosingDay ? (react_1.default.createElement(react_1.default.Fragment, null,
+            react_1.default.createElement("button", { onClick: () => mark("closed"), style: { ...btnPrimary, background: "var(--activity)", color: "#F9F6EE", marginTop: 16 } }, "Close the period"),
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 8 } },
                 "Undertaken ",
                 stamp(opened)))) : (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 14 } },
@@ -20060,7 +20107,7 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, coach.directives.map((d) => (react_1.default.createElement("div", { key: d.key, style: { borderTop: "1px solid #D8D0BF", paddingTop: 10 } },
                 react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: "#1B1B1B" } },
                     react_1.default.createElement("span", null, d.label),
-                    react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: "#0043FF" } },
+                    react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: "var(--activity)" } },
                         d.rec?.weight != null ? `${d.rec.weight}${exercises[d.key].unit} · ` : "",
                         d.rec?.sets ? `${d.rec.sets}×` : "",
                         d.rec?.reps)),
@@ -20069,7 +20116,7 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
                 react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600, color: "#1B1B1B", marginBottom: 6 } }, "Stretches after"),
                 react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 4 } }, coach.stretches.map((s) => (react_1.default.createElement("div", { key: s.key, style: { display: "flex", justifyContent: "space-between", fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759" } },
                     react_1.default.createElement("span", null, s.label),
-                    react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", color: "#0043FF" } },
+                    react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", color: "var(--activity)" } },
                         s.cfg.holdSeconds,
                         "s",
                         s.cfg.perSide ? "/side" : "",
@@ -20078,33 +20125,33 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
         coach.plateaus.length > 0 && (react_1.default.createElement("div", { style: { background: "#E5EDE4", border: "2px solid #2F6B4F", borderRadius: 0, padding: 20 } },
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#2F6B4F", marginBottom: 6 } }, "Needs attention"),
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, coach.plateaus.map((p, i) => (react_1.default.createElement("div", { key: i, style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } }, p)))))),
-        expansion.ready && (react_1.default.createElement("div", { style: { background: "#E4E9FF", border: "2px solid #0043FF", borderRadius: 0, padding: 20 } },
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "#0043FF" } }, "Ready to add"),
+        expansion.ready && (react_1.default.createElement("div", { style: { background: "var(--activity-tint)", border: "2px solid var(--activity)", borderRadius: 0, padding: 20 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "var(--activity)" } }, "Ready to add"),
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 22, fontWeight: 800, letterSpacing: -0.7, color: "#1B1B1B", margin: "4px 0 2px" } }, expansion.suggestion.label),
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#0043FF", marginBottom: 8 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "var(--activity)", marginBottom: 8 } },
                 "Fills a gap: ",
                 expansion.gapLabel,
                 " \u00B7 Session ",
                 expansion.suggestion.sessionType),
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } }, expansion.reason),
             react_1.default.createElement("div", { style: { display: "flex", gap: 8, marginTop: 14 } },
-                react_1.default.createElement("button", { onClick: () => addFromLibrary(expansion.suggestion), style: { ...btnPrimary, background: "#0043FF", color: "#F9F6EE", padding: "10px 16px", fontSize: 13 } }, "Add to routine"),
+                react_1.default.createElement("button", { onClick: () => addFromLibrary(expansion.suggestion), style: { ...btnPrimary, background: "var(--activity)", color: "#F9F6EE", padding: "10px 16px", fontSize: 13 } }, "Add to routine"),
                 react_1.default.createElement("button", { onClick: () => setShowExpansionDetail((v) => !v), style: { ...btnGhost, padding: "10px 16px", fontSize: 13 } }, showExpansionDetail ? "Hide how-to" : "How to do it")),
             showExpansionDetail && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.7, background: "#F9F6EE", borderRadius: 0, padding: 14, marginTop: 10, whiteSpace: "pre-wrap" } }, expansion.suggestion.explainer)))),
         !expansion.ready && expansion.reason && (react_1.default.createElement("div", { style: { background: expansion.atCapacity ? "#E5EDE4" : "#F9F6EE", border: `1.5px solid ${expansion.atCapacity ? "#2F6B4F" : "#D8D0BF"}`, borderRadius: 0, padding: 18 } },
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: expansion.atCapacity ? "#2F6B4F" : "#1B1B1B", marginBottom: 4 } }, expansion.atCapacity ? "Session at time capacity" : "Next movement to add"),
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.55 } }, expansion.reason))),
-        stretchExpansion.ready && (react_1.default.createElement("div", { style: { background: "#E4E9FF", border: "2px solid #0043FF", borderRadius: 0, padding: 20 } },
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "#0043FF" } }, "Ready to add \u2014 stretch"),
+        stretchExpansion.ready && (react_1.default.createElement("div", { style: { background: "var(--activity-tint)", border: "2px solid var(--activity)", borderRadius: 0, padding: 20 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "var(--activity)" } }, "Ready to add \u2014 stretch"),
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 22, fontWeight: 800, letterSpacing: -0.7, color: "#1B1B1B", margin: "4px 0 2px" } }, stretchExpansion.suggestion.label),
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#0043FF", marginBottom: 8 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "var(--activity)", marginBottom: 8 } },
                 stretchExpansion.suggestion.muscle,
                 " \u00B7 ",
                 stretchExpansion.suggestion.holdSeconds,
                 "s",
                 stretchExpansion.suggestion.perSide ? "/side" : ""),
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } }, stretchExpansion.reason),
-            react_1.default.createElement("button", { onClick: () => addStretchFromLibrary(stretchExpansion.suggestion), style: { ...btnPrimary, background: "#0043FF", color: "#F9F6EE", padding: "10px 16px", fontSize: 13, marginTop: 14 } }, "Add to routine"))),
+            react_1.default.createElement("button", { onClick: () => addStretchFromLibrary(stretchExpansion.suggestion), style: { ...btnPrimary, background: "var(--activity)", color: "#F9F6EE", padding: "10px 16px", fontSize: 13, marginTop: 14 } }, "Add to routine"))),
         react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#1B1B1B", marginTop: 4 } }, "Progression"),
         react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, Object.keys(exercises).filter(k => {
             const cfg = exercises[k];
@@ -20436,7 +20483,7 @@ function GroceryList({ recipe }) {
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", flex: 1 } }, "Big Y \u00B7 Market Basket \u00B7 Food City"),
             react_1.default.createElement("button", { onClick: copy, style: {
                     ...btnPrimary, padding: "8px 14px", fontSize: 12,
-                    background: copied ? "#0043FF" : "#1B1B1B",
+                    background: copied ? "var(--activity)" : "#1B1B1B",
                 } }, copied ? "Copied" : "Copy list")),
         react_1.default.createElement("textarea", { readOnly: true, onClick: (e) => e.target.select(), value: text, style: {
                 width: "100%", minHeight: 260, border: "2px solid #1B1B1B", padding: 12,
@@ -20515,8 +20562,8 @@ function KitchenRules({ rules, setRules }) {
                     ...btnPrimary, opacity: busy ? 0.6 : 1, padding: "10px 14px", fontSize: 12.5, alignSelf: "flex-start",
                 } }, busy ? "Working…" : "Make this a rule")),
             error && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", lineHeight: 1.55 } }, error)),
-            pending && (react_1.default.createElement("div", { style: { border: "2px solid #0043FF", background: "#E4E9FF", padding: 14, display: "flex", flexDirection: "column", gap: 10 } },
-                react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#0043FF" } }, "Yours to edit before it saves"),
+            pending && (react_1.default.createElement("div", { style: { border: "2px solid var(--activity)", background: "var(--activity-tint)", padding: 14, display: "flex", flexDirection: "column", gap: 10 } },
+                react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "var(--activity)" } }, "Yours to edit before it saves"),
                 react_1.default.createElement("textarea", { value: pending.text, onChange: (e) => setPending({ ...pending, text: e.target.value }), style: {
                         width: "100%", minHeight: 68, border: "2px solid #1B1B1B", padding: 10,
                         fontFamily: "'Inter', sans-serif", fontSize: 13, background: "#F9F6EE", color: "#1B1B1B", resize: "vertical",
@@ -20571,7 +20618,8 @@ function SourceBlock({ source }) {
             "Adapted by them from ",
             source.upstream)),
         (source.url || "").trim() && (react_1.default.createElement("a", { href: source.url, target: "_blank", rel: "noreferrer", style: {
-                display: "inline-block", marginTop: 8, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: "#0043FF",
+                // Going to someone else's site isn't your activity — links read as ink.
+                display: "inline-block", marginTop: 8, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: "#1B1B1B", textDecoration: "underline",
             } }, "Open the original \u2197")),
         Array.isArray(source.commentNotes) && source.commentNotes.length > 0 && (react_1.default.createElement("div", { style: { marginTop: 10, borderTop: "1px solid #D8D0BF", paddingTop: 8 } },
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 5 } }, "What other cooks reported"),
@@ -20687,7 +20735,7 @@ function Cooks({ recipes }) {
         react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, cooks.map((c) => (react_1.default.createElement("div", { key: c.name, style: { borderTop: "1px solid #D8D0BF", paddingTop: 8, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 } },
             react_1.default.createElement("div", null,
                 react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: "#1B1B1B" } }, c.name),
-                c.url ? (react_1.default.createElement("a", { href: c.url, target: "_blank", rel: "noreferrer", style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#0043FF" } }, c.site || "open ↗")) : c.site ? (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759" } }, c.site)) : null),
+                c.url ? (react_1.default.createElement("a", { href: c.url, target: "_blank", rel: "noreferrer", style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#1B1B1B", textDecoration: "underline" } }, c.site || "open ↗")) : c.site ? (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759" } }, c.site)) : null),
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759" } },
                 c.count,
                 " recipe",
@@ -20835,7 +20883,7 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
             ? "something warm, I have about 40 minutes — or leave this blank"
             : "leave blank and let the chef choose, or steer it: no rice this week");
     return (react_1.default.createElement("div", { ref: boxRef, style: { border: "2.5px solid #1B1B1B", background: "#F9F6EE", boxShadow: "6px 6px 0 #75695A", scrollMarginTop: 12 } },
-        react_1.default.createElement("div", { style: { background: "#0043FF", color: "#F9F6EE", padding: "12px 16px" } },
+        react_1.default.createElement("div", { style: { background: "var(--activity)", color: "#F9F6EE", padding: "12px 16px" } },
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" } }, "Ask the chef"),
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, opacity: 0.9, marginTop: 2, lineHeight: 1.5 } }, "It already knows your oven, your storage, your protein target, and everything you have told it didn't work.")),
         react_1.default.createElement("div", { style: { padding: 16, display: "flex", flexDirection: "column", gap: 14 } },
@@ -20891,7 +20939,7 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
                             "\u00B7 ",
                             c))))))),
                 react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 } },
-                    react_1.default.createElement("span", { style: { background: "#0043FF", color: "#F9F6EE", padding: "2px 6px" } },
+                    react_1.default.createElement("span", { style: { background: "var(--activity)", color: "#F9F6EE", padding: "2px 6px" } },
                         draft.proteinG,
                         "g protein"),
                     react_1.default.createElement("span", { style: { color: "#6E6759", marginLeft: 8 } },
@@ -21155,7 +21203,7 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rule
                         r.grain,
                         r.cuisine ? ` · ${r.cuisine}` : ""),
                     react_1.default.createElement("div", { style: { display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" } },
-                        react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, background: "#0043FF", color: "#F9F6EE", padding: "2px 6px" } },
+                        react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, background: "var(--activity)", color: "#F9F6EE", padding: "2px 6px" } },
                             r.proteinG,
                             "g protein"),
                         isMeal && (react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, border: "1.5px solid #1B1B1B", color: "#1B1B1B", padding: "2px 6px", textTransform: "uppercase", letterSpacing: 0.6 } }, "Single meal")),
@@ -21177,7 +21225,7 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rule
                         react_1.default.createElement("strong", null, "Sauce:"),
                         " ",
                         r.sauce),
-                    react_1.default.createElement("div", { style: { background: "#E4E9FF", border: "2px solid #0043FF", padding: "10px 14px", fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } },
+                    react_1.default.createElement("div", { style: { background: "var(--activity-tint)", border: "2px solid var(--activity)", padding: "10px 14px", fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } },
                         react_1.default.createElement("strong", null, "Prep:"),
                         " ",
                         r.prepNotes),
@@ -21196,7 +21244,7 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rule
                             r.activeMinutes ? ` · ${r.activeMinutes} min active` : ""),
                         r.method.map((m, i) => (react_1.default.createElement("div", { key: i, style: { borderTop: "1px solid #D8D0BF", paddingTop: 8, marginBottom: 8 } },
                             react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
-                                react_1.default.createElement("span", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 800, color: "#0043FF", minWidth: 18 } }, i + 1),
+                                react_1.default.createElement("span", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 800, color: "var(--activity)", minWidth: 18 } }, i + 1),
                                 react_1.default.createElement("div", null,
                                     react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600, color: "#1B1B1B" } }, m.t),
                                     react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6, marginTop: 2 } }, m.d)))))))),
@@ -21263,7 +21311,7 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
                 s.type && s.type !== "logged" && react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759" } },
                     "\u00B7 ",
                     s.type)),
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#0043FF" } }, s.distance ? `${s.distance} mi` : "")),
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--activity)" } }, s.distance ? `${s.distance} mi` : "")),
         react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#6E6759", marginTop: 4 } },
             s.duration,
             "min \u00B7 HR ",
@@ -21307,7 +21355,39 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
         })(),
         s.notes && react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 8, fontStyle: "italic" } }, s.notes))))));
 }
-function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice }) {
+// Judging a colour needs it next to the two things it can collide with — the
+// rejection red and the ink — and on top of a real progression line rather
+// than a swatch.
+function ActivityColourPicker({ value, onChange }) {
+    const demo = [95, 95, 100, 100, 105, 105, 110, 115, 115, 120];
+    return (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14, marginTop: 6 } },
+        react_1.default.createElement("div", { style: { border: "2px solid #1B1B1B", padding: 12 } },
+            react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 } },
+                react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759" } }, "Sample progression"),
+                react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: "var(--activity)", fontWeight: 600 } }, "120 lb")),
+            react_1.default.createElement(Sparkline, { data: demo, width: 320, height: 56 }),
+            react_1.default.createElement("div", { style: { display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" } },
+                react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, background: "var(--activity)", color: "#F9F6EE", padding: "2px 6px" } }, "activity"),
+                react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, background: "#BE3B2A", color: "#F9F6EE", padding: "2px 6px" } }, "rejection"),
+                react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, background: "#FFC400", color: "#1B1B1B", padding: "2px 6px" } }, "alternate day"),
+                react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, background: "#2F6B4F", color: "#F9F6EE", padding: "2px 6px" } }, "advisory")),
+            react_1.default.createElement("div", { style: { ...annotationStyle, marginTop: 12 } }, "Your own note reads in this colour too \u2014 cut the soy sauce by half.")),
+        react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, ACTIVITY_THEMES.map((t) => {
+            const on = t.key === value;
+            return (react_1.default.createElement("button", { key: t.key, onClick: () => onChange(t.key), style: {
+                    display: "flex", alignItems: "center", gap: 12, textAlign: "left", cursor: "pointer",
+                    border: on ? "2.5px solid #1B1B1B" : "2px solid #D8D0BF",
+                    background: on ? "#EFE9DC" : "#F9F6EE", padding: "10px 12px",
+                } },
+                react_1.default.createElement("span", { style: { width: 26, height: 26, background: t.color, flex: "0 0 auto", border: "1.5px solid #1B1B1B" } }),
+                react_1.default.createElement("span", { style: { flex: 1 } },
+                    react_1.default.createElement("span", { style: { display: "block", fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: on ? 700 : 500, color: "#1B1B1B" } }, t.label),
+                    react_1.default.createElement("span", { style: { display: "block", fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: "#6E6759", marginTop: 2 } }, t.note)),
+                react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", textTransform: "uppercase", letterSpacing: 0.6 } }, on ? "On" : "")));
+        })),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", lineHeight: 1.6 } }, "Changes everything at once \u2014 the graph, the sit minutes, the chef frame, your annotations. Live, so it's worth checking the Today and History tabs before deciding.")));
+}
+function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, themeKey, setThemeKey }) {
     const [showAdd, setShowAdd] = (0, react_1.useState)(false);
     const [showRaw, setShowRaw] = (0, react_1.useState)(false);
     const [newEx, setNewEx] = (0, react_1.useState)({ label: "", unit: "lb", targetSets: 3, targetReps: 12, step: 5, noWeight: false, toChamber: false, sessionType: "both" });
@@ -21411,10 +21491,12 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
                     importData(e.target.files[0]); } }),
             importStatus && react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 6 } }, importStatus),
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: "#6E6759", marginTop: 8, lineHeight: 1.5 } }, "Whenever you get an updated version of this file from me, export first, open the new file, then import \u2014 it carries sessions, plan, exercises, stretches, recipes, meal plan and practice entries. If the download does not start (some phones block it from a local file), use Show as text and copy it into a note instead.")),
+        react_1.default.createElement(Card, { title: "Activity colour", sub: "The accent on everything you did yourself" },
+            react_1.default.createElement(ActivityColourPicker, { value: themeKey, onChange: setThemeKey })),
         react_1.default.createElement(Card, { title: "Goals" },
             react_1.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, plan.goals.map((g) => (react_1.default.createElement("span", { key: g, style: {
                     fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13,
-                    padding: "8px 14px", borderRadius: 0, background: "#0043FF", color: "#F9F6EE",
+                    padding: "8px 14px", borderRadius: 0, background: "var(--activity)", color: "#F9F6EE",
                 } }, g))))),
         react_1.default.createElement(Card, { title: "Progression rule", sub: "How the ladder above updates automatically" },
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#1B1B1B", lineHeight: 1.6 } }, plan.progressionRule)),
@@ -21429,7 +21511,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
                     react_1.default.createElement("div", null,
                         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13, color: "#1B1B1B" } },
                             exercises[q.key]?.label || q.key,
-                            alreadyLogged && react_1.default.createElement("span", { style: { color: "#0043FF", fontWeight: 500 } }, " \u00B7 already logged")),
+                            alreadyLogged && react_1.default.createElement("span", { style: { color: "var(--activity)", fontWeight: 500 } }, " \u00B7 already logged")),
                         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759" } }, q.note)),
                     react_1.default.createElement("button", { onClick: () => {
                             const updated = { ...plan, queue: plan.queue.filter((_, idx) => idx !== i) };
@@ -21475,6 +21557,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
                 react_1.default.createElement(Plus, { size: 15 }),
                 " Add exercise")))));
 }
+applyTheme(loadThemeKey());
 const root = client_1.default.createRoot(document.getElementById("root"));
 root.render(react_1.default.createElement(App, null));
 };

@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. Output ceilings are 8000 for import and 6000 for generation, raised after a truncated reply surfaced as a raw JSON.parse error; truncated and unreadable replies are distinguished and phrased via CHEF_ERRORS, and a pause_turn stop reason is resumed by handing the assistant turn back, up to three turns. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette rules unchanged: blue #0043FF action only, yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. Output ceilings are 8000 for import and 6000 for generation, raised after a truncated reply surfaced as a raw JSON.parse error; truncated and unreadable replies are distinguished and phrased via CHEF_ERRORS, and a pause_turn stop reason is resumed by handing the assistant turn back, up to three turns. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette shift in progress: the former blue accent has been renamed to the activity colour and moved behind CSS custom properties --activity and --activity-tint, applied at module load before first paint and switchable live from a picker in the Plan tab (ACTIVITY_THEMES: blue, burnt sienna, burnt umber, ember; stored under the theme key). Activity means the cook's own doing — weight sparkline, sit minutes, chef import frame, annotationStyle handwriting. Outbound links are no longer activity: they are ink #1B1B1B underlined. Remaining fixed palette: yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Watch the activity/rejection collision when picking a final orange. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -338,7 +338,7 @@ const COMPLETION_OPTIONS = [
 ];
 
 const FEEL_OPTIONS = [
-  { key: &quot;easy&quot;, label: &quot;Easy — ready to progress&quot;, color: &quot;#0043FF&quot; },
+  { key: &quot;easy&quot;, label: &quot;Easy — ready to progress&quot;, color: &quot;var(--activity)&quot; },
   { key: &quot;solid&quot;, label: &quot;Solid, stay here&quot;, color: &quot;#1B1B1B&quot; },
   { key: &quot;hard&quot;, label: &quot;Tough but completed&quot;, color: &quot;#BE3B2A&quot; },
   { key: &quot;struggled&quot;, label: &quot;Struggled / dropped weight&quot;, color: &quot;#BE3B2A&quot; },
@@ -386,6 +386,7 @@ const STORAGE_LABELS = {
   &quot;meal-plan&quot;: &quot;that meal plan change&quot;,
   &quot;sila&quot;: &quot;that sila marker&quot;,
   &quot;kitchen-rules&quot;: &quot;that kitchen rule&quot;,
+  &quot;theme&quot;: &quot;that colour change&quot;,
   &quot;log-draft&quot;: &quot;the in-progress workout draft&quot;,
 };
 
@@ -1503,7 +1504,7 @@ function StepDots({ step, total }) {
       {Array.from({ length: total }).map((_, i) =&gt; (
         &lt;div key={i} style={{
           width: i === step ? 20 : 6, height: 6, borderRadius: 0,
-          background: i === step ? &quot;#0043FF&quot; : &quot;#1B1B1B&quot;,
+          background: i === step ? &quot;var(--activity)&quot; : &quot;#1B1B1B&quot;,
           transition: &quot;all .25s ease&quot;
         }} /&gt;
       ))}
@@ -1518,8 +1519,8 @@ function Chip({ active, onClick, children, color }) {
       style={{
         padding: &quot;10px 16px&quot;,
         borderRadius: 0,
-        border: `1.5px solid ${active ? (color || &quot;#0043FF&quot;) : &quot;#1B1B1B&quot;}`,
-        background: active ? (color || &quot;#0043FF&quot;) : &quot;#F9F6EE&quot;,
+        border: `1.5px solid ${active ? (color || &quot;var(--activity)&quot;) : &quot;#1B1B1B&quot;}`,
+        background: active ? (color || &quot;var(--activity)&quot;) : &quot;#F9F6EE&quot;,
         color: active ? &quot;#F9F6EE&quot; : &quot;#1B1B1B&quot;,
         fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;,
         fontSize: 14,
@@ -1629,8 +1630,8 @@ const stampStyle = {
 // typewriter italics rather than a script face.
 const annotationStyle = {
   fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontStyle: &quot;italic&quot;, fontSize: 12,
-  color: &quot;#0043FF&quot;, marginTop: 10, lineHeight: 1.55,
-  borderLeft: &quot;3px solid #0043FF&quot;, paddingLeft: 9,
+  color: &quot;var(--activity)&quot;, marginTop: 10, lineHeight: 1.55,
+  borderLeft: &quot;3px solid var(--activity)&quot;, paddingLeft: 9,
 };
 
 // ---------- log wizard ----------
@@ -1758,8 +1759,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
             &lt;/div&gt;
           &lt;/Field&gt;
           &lt;div style={{
-            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#0043FF&quot;, lineHeight: 1.6,
-            background: &quot;#E4E9FF&quot;, border: &quot;2px solid #0043FF&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
+            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
+            background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
           }}&gt;
             Coach: {cardioTarget.rationale}
           &lt;/div&gt;
@@ -1797,8 +1798,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
       {current === &quot;warmup&quot; &amp;&amp; (
         &lt;Card title=&quot;Movement Prep&quot; sub=&quot;Before lifting · about 3 minutes&quot;&gt;
           &lt;div style={{
-            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#0043FF&quot;, lineHeight: 1.6,
-            background: &quot;#E4E9FF&quot;, border: &quot;2px solid #0043FF&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
+            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
+            background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
           }}&gt;
             Coach: dynamic movement before lifting primes the muscles you&#x27;re about to load. Save the long static holds for after — held cold, they temporarily reduce strength output.
           &lt;/div&gt;
@@ -1834,8 +1835,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
       {current === &quot;stretches&quot; &amp;&amp; (
         &lt;Card title=&quot;Stretch Routine&quot; sub={`After training, while warm · Session ${entry.type} emphasis`}&gt;
           &lt;div style={{
-            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#0043FF&quot;, lineHeight: 1.6,
-            background: &quot;#E4E9FF&quot;, border: &quot;2px solid #0043FF&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
+            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
+            background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
           }}&gt;
             Coach: rounds build toward roughly {STRETCH_TARGET_ACCUM}s total per muscle group — the point where added time stops paying off. Log the rounds you actually did.
           &lt;/div&gt;
@@ -1847,7 +1848,7 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                 &lt;div key={s.key} style={{ borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 10 }}&gt;
                   &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;baseline&quot;, justifyContent: &quot;space-between&quot;, gap: 8 }}&gt;
                     &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 14, color: &quot;#1B1B1B&quot; }}&gt;{s.label}&lt;/div&gt;
-                    &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;#0043FF&quot; }}&gt;
+                    &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;var(--activity)&quot; }}&gt;
                       {s.holdSeconds}s{s.perSide ? &quot;/side&quot; : &quot;&quot;} × {rec.rounds}
                     &lt;/div&gt;
                   &lt;/div&gt;
@@ -1860,8 +1861,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                         style={{
                           padding: &quot;6px 12px&quot;, borderRadius: 0, fontSize: 12, cursor: &quot;pointer&quot;,
                           fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;,
-                          border: `1.5px solid ${val === r ? &quot;#0043FF&quot; : &quot;#1B1B1B&quot;}`,
-                          background: val === r ? &quot;#0043FF&quot; : &quot;#F9F6EE&quot;,
+                          border: `1.5px solid ${val === r ? &quot;var(--activity)&quot; : &quot;#1B1B1B&quot;}`,
+                          background: val === r ? &quot;var(--activity)&quot; : &quot;#F9F6EE&quot;,
                           color: val === r ? &quot;#F9F6EE&quot; : &quot;#1B1B1B&quot;,
                         }}&gt;{r === 0 ? &quot;skipped&quot; : `${r} round${r === 1 ? &quot;&quot; : &quot;s&quot;}`}&lt;/button&gt;
                     ))}
@@ -1949,8 +1950,8 @@ function ExerciseStep({ exKey, sessions, exercises, entry, setExercise, onSkip }
     &lt;Card title={cfg.label} sub={showWeight ? `Planned: ${rec?.weight ?? &quot;—&quot;}${cfg.unit} × ${rec?.sets ?? cfg.targetSets}×${rec?.reps ?? cfg.targetReps}` : `Planned: ${rec?.reps ?? cfg.targetReps} reps / side`}&gt;
       {rec?.rationale &amp;&amp; (
         &lt;div style={{
-          fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#0043FF&quot;, lineHeight: 1.6,
-          background: &quot;#E4E9FF&quot;, border: &quot;2px solid #0043FF&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
+          fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
+          background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
         }}&gt;
           Coach: {rec.rationale}
         &lt;/div&gt;
@@ -2080,16 +2081,16 @@ function ProgressionLadder({ sessions, exKey, exercises }) {
     &lt;div style={{ background: &quot;#F9F6EE&quot;, border: &quot;2.5px solid #1B1B1B&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, borderRadius: 0, padding: &quot;18px 20px&quot; }}&gt;
       &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;baseline&quot;, marginBottom: 8 }}&gt;
         &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot; }}&gt;{cfg.label}&lt;/div&gt;
-        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 13, color: &quot;#0043FF&quot;, fontWeight: 600 }}&gt;
+        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 13, color: &quot;var(--activity)&quot;, fontWeight: 600 }}&gt;
           {data[data.length - 1].weight}{cfg.unit}
         &lt;/div&gt;
       &lt;/div&gt;
-      &lt;Sparkline data={data.map((d) =&gt; d.weight)} width={340} height={64} color=&quot;#0043FF&quot; /&gt;
+      &lt;Sparkline data={data.map((d) =&gt; d.weight)} width={340} height={64} color=&quot;var(--activity)&quot; /&gt;
     &lt;/div&gt;
   );
 }
 
-function Sparkline({ data, width = 300, height = 60, color = &quot;#0043FF&quot; }) {
+function Sparkline({ data, width = 300, height = 60, color = &quot;var(--activity)&quot; }) {
   if (!data || data.length === 0) return null;
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -2510,6 +2511,51 @@ The note describes something learned while cooking. Convert it into ONE instruct
 Respond with ONLY a JSON object, no markdown fence, no preamble:
 {&quot;text&quot;:&quot;&quot;,&quot;why&quot;:&quot;&quot;}`;
 
+// ---------- activity colour ----------
+// One accent carries everything that is the cook&#x27;s own doing: the weight
+// sparkline, the minutes sat, the frame around a recipe being brought in, and
+// their handwriting in the annotation style. Links out are not that — going to
+// someone else&#x27;s site is ink now — and neither is rejection, which keeps its
+// own red.
+//
+// The candidates live here rather than in a stylesheet so the whole set can be
+// tried against real data on the phone. The two reds are worth watching: brick
+// #BE3B2A is rejection, and an orange that drifts too close to it makes &quot;the
+// weight I lifted&quot; and &quot;never again&quot; the same colour at a glance.
+const ACTIVITY_THEMES = [
+  { key: &quot;blue&quot;, label: &quot;Blue&quot;, note: &quot;What&#x27;s there now&quot;, color: &quot;#0043FF&quot;, tint: &quot;#E4E9FF&quot; },
+  { key: &quot;sienna&quot;, label: &quot;Burnt sienna&quot;, note: &quot;Earth pigment, mid weight&quot;, color: &quot;#A6522C&quot;, tint: &quot;#F3E3D8&quot; },
+  { key: &quot;umber&quot;, label: &quot;Burnt umber&quot;, note: &quot;Darkest, furthest from the red&quot;, color: &quot;#8A4A22&quot;, tint: &quot;#F0E3D6&quot; },
+  { key: &quot;ember&quot;, label: &quot;Ember&quot;, note: &quot;Brightest, closest to the red&quot;, color: &quot;#C0632A&quot;, tint: &quot;#F7E7D9&quot; },
+];
+
+function themeByKey(key) {
+  return ACTIVITY_THEMES.find((t) =&gt; t.key === key) || ACTIVITY_THEMES[0];
+}
+
+function applyTheme(key) {
+  const t = themeByKey(key);
+  try {
+    document.documentElement.style.setProperty(&quot;--activity&quot;, t.color);
+    document.documentElement.style.setProperty(&quot;--activity-tint&quot;, t.tint);
+  } catch (e) {}
+  return t.key;
+}
+
+// Read and apply before React paints, so the app never flashes an unset
+// variable on launch.
+function loadThemeKey() {
+  try {
+    const raw = lsGet(&quot;theme&quot;);
+    return raw ? themeByKey(JSON.parse(raw.value)).key : &quot;blue&quot;;
+  } catch (e) {
+    return &quot;blue&quot;;
+  }
+}
+
+async function saveThemeKey(key) { lsSet(&quot;theme&quot;, JSON.stringify(key)); }
+
+
 // ---------- sila period (annual training period) ----------
 // Two months given over to the training precepts, September 1 to October 31,
 // every year. It is not a streak and there is nothing to score. The period does
@@ -2748,13 +2794,13 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
                 style={{
                   border: &quot;none&quot;, background: &quot;transparent&quot;, padding: &quot;0 0 2px&quot;, cursor: &quot;pointer&quot;, textAlign: &quot;left&quot;,
                   fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 15, color: &quot;#1B1B1B&quot;,
-                  borderBottom: editingId === p.id ? &quot;2px solid #0043FF&quot; : &quot;2px dotted #A9A192&quot;,
+                  borderBottom: editingId === p.id ? &quot;2px solid var(--activity)&quot; : &quot;2px dotted #A9A192&quot;,
                 }}
               &gt;
                 {p.date}
               &lt;/button&gt;
               &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 10, flex: &quot;0 0 auto&quot; }}&gt;
-                &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;#0043FF&quot; }}&gt;{p.duration} min&lt;/div&gt;
+                &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;var(--activity)&quot; }}&gt;{p.duration} min&lt;/div&gt;
                 &lt;button
                   onClick={() =&gt; { setConfirmId(confirmId === p.id ? null : p.id); setEditingId(null); }}
                   aria-label=&quot;Delete entry&quot;
@@ -2847,6 +2893,7 @@ function App() {
   const [mealPlan, setMealPlan] = useState([]);
   const [sila, setSila] = useState({});
   const [kitchenRules, setKitchenRules] = useState(SEED_RULES);
+  const [themeKey, setThemeKeyState] = useState(loadThemeKey);
   const [saveWarning, setSaveWarning] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState(&quot;&quot;);
@@ -2900,6 +2947,11 @@ function App() {
   // One subscriber for every refused write in the app. The write layer names
   // the thing that didn&#x27;t stick; this puts it on screen once, wherever he is.
   useEffect(() =&gt; onStorageFailure((what) =&gt; setSaveWarning(what)), []);
+
+  const setThemeKey = useCallback((key) =&gt; {
+    setThemeKeyState(applyTheme(key));
+    saveThemeKey(key);
+  }, []);
 
   const updateKitchenRules = useCallback((updater) =&gt; {
     setKitchenRules((prev) =&gt; {
@@ -3006,7 +3058,7 @@ function App() {
           &lt;/div&gt;
           &lt;button onClick={() =&gt; setShowSettings(true)} style={{
             width: 34, height: 34, borderRadius: 0, border: &quot;2.5px solid #1B1B1B&quot;, background: &quot;#F9F6EE&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;,
-            display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot;, cursor: &quot;pointer&quot;, color: hasKey ? &quot;#0043FF&quot; : &quot;#BE3B2A&quot;,
+            display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot;, cursor: &quot;pointer&quot;, color: hasKey ? &quot;var(--activity)&quot; : &quot;#BE3B2A&quot;,
           }} title={hasKey ? &quot;API key set&quot; : &quot;Set API key for AI features&quot;}&gt;
             &lt;Key size={16} /&gt;
           &lt;/button&gt;
@@ -3097,7 +3149,7 @@ function App() {
         ) : tab === &quot;history&quot; ? (
           &lt;HistoryTab sessions={sessions} exercises={exercises} allStretches={stretches} recipes={recipes} mealPlan={mealPlan} /&gt;
         ) : (
-          &lt;PlanTab plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} /&gt;
+          &lt;PlanTab themeKey={themeKey} setThemeKey={setThemeKey} plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} /&gt;
         )}
 
         {toast &amp;&amp; (
@@ -3232,12 +3284,12 @@ function SilaBand({ sila, setSila }) {
       )}
 
       {!opened ? (
-        &lt;button onClick={() =&gt; mark(&quot;opened&quot;)} style={{ ...btnPrimary, background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, marginTop: 16 }}&gt;
+        &lt;button onClick={() =&gt; mark(&quot;opened&quot;)} style={{ ...btnPrimary, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, marginTop: 16 }}&gt;
           Undertake the period
         &lt;/button&gt;
       ) : !closed &amp;&amp; period.isClosingDay ? (
         &lt;&gt;
-          &lt;button onClick={() =&gt; mark(&quot;closed&quot;)} style={{ ...btnPrimary, background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, marginTop: 16 }}&gt;
+          &lt;button onClick={() =&gt; mark(&quot;closed&quot;)} style={{ ...btnPrimary, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, marginTop: 16 }}&gt;
             Close the period
           &lt;/button&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, color: &quot;#6E6759&quot;, marginTop: 8 }}&gt;
@@ -3364,7 +3416,7 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
               &lt;div key={d.key} style={{ borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 10 }}&gt;
                 &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13.5, fontWeight: 600, color: &quot;#1B1B1B&quot; }}&gt;
                   &lt;span&gt;{d.label}&lt;/span&gt;
-                  &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12.5, color: &quot;#0043FF&quot; }}&gt;
+                  &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot; }}&gt;
                     {d.rec?.weight != null ? `${d.rec.weight}${exercises[d.key].unit} · ` : &quot;&quot;}{d.rec?.sets ? `${d.rec.sets}×` : &quot;&quot;}{d.rec?.reps}
                   &lt;/span&gt;
                 &lt;/div&gt;
@@ -3382,7 +3434,7 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
               {coach.stretches.map((s) =&gt; (
                 &lt;div key={s.key} style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot; }}&gt;
                   &lt;span&gt;{s.label}&lt;/span&gt;
-                  &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, color: &quot;#0043FF&quot; }}&gt;
+                  &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, color: &quot;var(--activity)&quot; }}&gt;
                     {s.cfg.holdSeconds}s{s.cfg.perSide ? &quot;/side&quot; : &quot;&quot;} × {s.rec.rounds}
                   &lt;/span&gt;
                 &lt;/div&gt;
@@ -3404,21 +3456,21 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
       )}
 
       {expansion.ready &amp;&amp; (
-        &lt;div style={{ background: &quot;#E4E9FF&quot;, border: &quot;2px solid #0043FF&quot;, borderRadius: 0, padding: 20 }}&gt;
-          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#0043FF&quot; }}&gt;
+        &lt;div style={{ background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: 20 }}&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;var(--activity)&quot; }}&gt;
             Ready to add
           &lt;/div&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 22, fontWeight: 800, letterSpacing: -0.7, color: &quot;#1B1B1B&quot;, margin: &quot;4px 0 2px&quot; }}&gt;
             {expansion.suggestion.label}
           &lt;/div&gt;
-          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#0043FF&quot;, marginBottom: 8 }}&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;var(--activity)&quot;, marginBottom: 8 }}&gt;
             Fills a gap: {expansion.gapLabel} · Session {expansion.suggestion.sessionType}
           &lt;/div&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
             {expansion.reason}
           &lt;/div&gt;
           &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginTop: 14 }}&gt;
-            &lt;button onClick={() =&gt; addFromLibrary(expansion.suggestion)} style={{ ...btnPrimary, background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;10px 16px&quot;, fontSize: 13 }}&gt;
+            &lt;button onClick={() =&gt; addFromLibrary(expansion.suggestion)} style={{ ...btnPrimary, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;10px 16px&quot;, fontSize: 13 }}&gt;
               Add to routine
             &lt;/button&gt;
             &lt;button onClick={() =&gt; setShowExpansionDetail((v) =&gt; !v)} style={{ ...btnGhost, padding: &quot;10px 16px&quot;, fontSize: 13 }}&gt;
@@ -3445,21 +3497,21 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
       )}
 
       {stretchExpansion.ready &amp;&amp; (
-        &lt;div style={{ background: &quot;#E4E9FF&quot;, border: &quot;2px solid #0043FF&quot;, borderRadius: 0, padding: 20 }}&gt;
-          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#0043FF&quot; }}&gt;
+        &lt;div style={{ background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: 20 }}&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;var(--activity)&quot; }}&gt;
             Ready to add — stretch
           &lt;/div&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 22, fontWeight: 800, letterSpacing: -0.7, color: &quot;#1B1B1B&quot;, margin: &quot;4px 0 2px&quot; }}&gt;
             {stretchExpansion.suggestion.label}
           &lt;/div&gt;
-          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#0043FF&quot;, marginBottom: 8 }}&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;var(--activity)&quot;, marginBottom: 8 }}&gt;
             {stretchExpansion.suggestion.muscle} · {stretchExpansion.suggestion.holdSeconds}s
             {stretchExpansion.suggestion.perSide ? &quot;/side&quot; : &quot;&quot;}
           &lt;/div&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
             {stretchExpansion.reason}
           &lt;/div&gt;
-          &lt;button onClick={() =&gt; addStretchFromLibrary(stretchExpansion.suggestion)} style={{ ...btnPrimary, background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;10px 16px&quot;, fontSize: 13, marginTop: 14 }}&gt;
+          &lt;button onClick={() =&gt; addStretchFromLibrary(stretchExpansion.suggestion)} style={{ ...btnPrimary, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;10px 16px&quot;, fontSize: 13, marginTop: 14 }}&gt;
             Add to routine
           &lt;/button&gt;
         &lt;/div&gt;
@@ -3836,7 +3888,7 @@ function GroceryList({ recipe }) {
         &lt;/div&gt;
         &lt;button onClick={copy} style={{
           ...btnPrimary, padding: &quot;8px 14px&quot;, fontSize: 12,
-          background: copied ? &quot;#0043FF&quot; : &quot;#1B1B1B&quot;,
+          background: copied ? &quot;var(--activity)&quot; : &quot;#1B1B1B&quot;,
         }}&gt;
           {copied ? &quot;Copied&quot; : &quot;Copy list&quot;}
         &lt;/button&gt;
@@ -3946,8 +3998,8 @@ function KitchenRules({ rules, setRules }) {
           )}
 
           {pending &amp;&amp; (
-            &lt;div style={{ border: &quot;2px solid #0043FF&quot;, background: &quot;#E4E9FF&quot;, padding: 14, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 10 }}&gt;
-              &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#0043FF&quot; }}&gt;
+            &lt;div style={{ border: &quot;2px solid var(--activity)&quot;, background: &quot;var(--activity-tint)&quot;, padding: 14, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 10 }}&gt;
+              &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;var(--activity)&quot; }}&gt;
                 Yours to edit before it saves
               &lt;/div&gt;
               &lt;textarea
@@ -4072,7 +4124,8 @@ function SourceBlock({ source }) {
       )}
       {(source.url || &quot;&quot;).trim() &amp;&amp; (
         &lt;a href={source.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{
-          display: &quot;inline-block&quot;, marginTop: 8, fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11.5, color: &quot;#0043FF&quot;,
+          // Going to someone else&#x27;s site isn&#x27;t your activity — links read as ink.
+          display: &quot;inline-block&quot;, marginTop: 8, fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11.5, color: &quot;#1B1B1B&quot;, textDecoration: &quot;underline&quot;,
         }}&gt;
           Open the original ↗
         &lt;/a&gt;
@@ -4238,7 +4291,7 @@ function Cooks({ recipes }) {
             &lt;div&gt;
               &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13.5, fontWeight: 600, color: &quot;#1B1B1B&quot; }}&gt;{c.name}&lt;/div&gt;
               {c.url ? (
-                &lt;a href={c.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#0043FF&quot; }}&gt;
+                &lt;a href={c.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#1B1B1B&quot;, textDecoration: &quot;underline&quot; }}&gt;
                   {c.site || &quot;open ↗&quot;}
                 &lt;/a&gt;
               ) : c.site ? (
@@ -4381,7 +4434,7 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
 
   return (
     &lt;div ref={boxRef} style={{ border: &quot;2.5px solid #1B1B1B&quot;, background: &quot;#F9F6EE&quot;, boxShadow: &quot;6px 6px 0 #75695A&quot;, scrollMarginTop: 12 }}&gt;
-      &lt;div style={{ background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;12px 16px&quot; }}&gt;
+      &lt;div style={{ background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;12px 16px&quot; }}&gt;
         &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot; }}&gt;
           Ask the chef
         &lt;/div&gt;
@@ -4550,7 +4603,7 @@ function ChefPanel({ recipes, onSave, seed, onSeedUsed, rules }) {
               &lt;/div&gt;
             )}
             &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11 }}&gt;
-              &lt;span style={{ background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;{draft.proteinG}g protein&lt;/span&gt;
+              &lt;span style={{ background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;{draft.proteinG}g protein&lt;/span&gt;
               &lt;span style={{ color: &quot;#6E6759&quot;, marginLeft: 8 }}&gt;{draft.activeMinutes} min active&lt;/span&gt;
               {draft.cuisine &amp;&amp; &lt;span style={{ color: &quot;#6E6759&quot;, marginLeft: 8 }}&gt;{draft.cuisine}&lt;/span&gt;}
             &lt;/div&gt;
@@ -4932,7 +4985,7 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rule
                 {r.protein} · {r.grain}{r.cuisine ? ` · ${r.cuisine}` : &quot;&quot;}
               &lt;/div&gt;
               &lt;div style={{ display: &quot;flex&quot;, gap: 6, marginTop: 8, flexWrap: &quot;wrap&quot;, alignItems: &quot;center&quot; }}&gt;
-                &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
+                &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
                   {r.proteinG}g protein
                 &lt;/span&gt;
                 {isMeal &amp;&amp; (
@@ -4976,7 +5029,7 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rule
                   &lt;strong&gt;Sauce:&lt;/strong&gt; {r.sauce}
                 &lt;/div&gt;
 
-                &lt;div style={{ background: &quot;#E4E9FF&quot;, border: &quot;2px solid #0043FF&quot;, padding: &quot;10px 14px&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
+                &lt;div style={{ background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, padding: &quot;10px 14px&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;
                   &lt;strong&gt;Prep:&lt;/strong&gt; {r.prepNotes}
                 &lt;/div&gt;
 
@@ -5007,7 +5060,7 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rule
                     {r.method.map((m, i) =&gt; (
                       &lt;div key={i} style={{ borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 8, marginBottom: 8 }}&gt;
                         &lt;div style={{ display: &quot;flex&quot;, gap: 8 }}&gt;
-                          &lt;span style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 800, color: &quot;#0043FF&quot;, minWidth: 18 }}&gt;{i + 1}&lt;/span&gt;
+                          &lt;span style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 800, color: &quot;var(--activity)&quot;, minWidth: 18 }}&gt;{i + 1}&lt;/span&gt;
                           &lt;div&gt;
                             &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, fontWeight: 600, color: &quot;#1B1B1B&quot; }}&gt;{m.t}&lt;/div&gt;
                             &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6, marginTop: 2 }}&gt;{m.d}&lt;/div&gt;
@@ -5135,7 +5188,7 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
             &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 15, color: &quot;#1B1B1B&quot; }}&gt;
               {s.date} {s.type &amp;&amp; s.type !== &quot;logged&quot; &amp;&amp; &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot; }}&gt;· {s.type}&lt;/span&gt;}
             &lt;/div&gt;
-            &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;#0043FF&quot; }}&gt;{s.distance ? `${s.distance} mi` : &quot;&quot;}&lt;/div&gt;
+            &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;var(--activity)&quot; }}&gt;{s.distance ? `${s.distance} mi` : &quot;&quot;}&lt;/div&gt;
           &lt;/div&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;#6E6759&quot;, marginTop: 4 }}&gt;
             {s.duration}min · HR {s.hrAvg}/{s.hrMax}
@@ -5182,7 +5235,76 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
   );
 }
 
-function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice }) {
+// Judging a colour needs it next to the two things it can collide with — the
+// rejection red and the ink — and on top of a real progression line rather
+// than a swatch.
+function ActivityColourPicker({ value, onChange }) {
+  const demo = [95, 95, 100, 100, 105, 105, 110, 115, 115, 120];
+  return (
+    &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 14, marginTop: 6 }}&gt;
+      &lt;div style={{ border: &quot;2px solid #1B1B1B&quot;, padding: 12 }}&gt;
+        &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;baseline&quot;, marginBottom: 4 }}&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;
+            Sample progression
+          &lt;/div&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 13, color: &quot;var(--activity)&quot;, fontWeight: 600 }}&gt;
+            120 lb
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;Sparkline data={demo} width={320} height={56} /&gt;
+        &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginTop: 10, flexWrap: &quot;wrap&quot; }}&gt;
+          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
+            activity
+          &lt;/span&gt;
+          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;#BE3B2A&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
+            rejection
+          &lt;/span&gt;
+          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;#FFC400&quot;, color: &quot;#1B1B1B&quot;, padding: &quot;2px 6px&quot; }}&gt;
+            alternate day
+          &lt;/span&gt;
+          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;#2F6B4F&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
+            advisory
+          &lt;/span&gt;
+        &lt;/div&gt;
+        &lt;div style={{ ...annotationStyle, marginTop: 12 }}&gt;
+          Your own note reads in this colour too — cut the soy sauce by half.
+        &lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
+        {ACTIVITY_THEMES.map((t) =&gt; {
+          const on = t.key === value;
+          return (
+            &lt;button key={t.key} onClick={() =&gt; onChange(t.key)} style={{
+              display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 12, textAlign: &quot;left&quot;, cursor: &quot;pointer&quot;,
+              border: on ? &quot;2.5px solid #1B1B1B&quot; : &quot;2px solid #D8D0BF&quot;,
+              background: on ? &quot;#EFE9DC&quot; : &quot;#F9F6EE&quot;, padding: &quot;10px 12px&quot;,
+            }}&gt;
+              &lt;span style={{ width: 26, height: 26, background: t.color, flex: &quot;0 0 auto&quot;, border: &quot;1.5px solid #1B1B1B&quot; }} /&gt;
+              &lt;span style={{ flex: 1 }}&gt;
+                &lt;span style={{ display: &quot;block&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, fontWeight: on ? 700 : 500, color: &quot;#1B1B1B&quot; }}&gt;
+                  {t.label}
+                &lt;/span&gt;
+                &lt;span style={{ display: &quot;block&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, marginTop: 2 }}&gt;
+                  {t.note}
+                &lt;/span&gt;
+              &lt;/span&gt;
+              &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, color: &quot;#6E6759&quot;, textTransform: &quot;uppercase&quot;, letterSpacing: 0.6 }}&gt;
+                {on ? &quot;On&quot; : &quot;&quot;}
+              &lt;/span&gt;
+            &lt;/button&gt;
+          );
+        })}
+      &lt;/div&gt;
+
+      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, lineHeight: 1.6 }}&gt;
+        Changes everything at once — the graph, the sit minutes, the chef frame, your annotations. Live, so it&#x27;s worth checking the Today and History tabs before deciding.
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, themeKey, setThemeKey }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [newEx, setNewEx] = useState({ label: &quot;&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 5, noWeight: false, toChamber: false, sessionType: &quot;both&quot; });
@@ -5295,12 +5417,16 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
           Whenever you get an updated version of this file from me, export first, open the new file, then import — it carries sessions, plan, exercises, stretches, recipes, meal plan and practice entries. If the download does not start (some phones block it from a local file), use Show as text and copy it into a note instead.
           &lt;/div&gt;
       &lt;/Card&gt;
+      &lt;Card title=&quot;Activity colour&quot; sub=&quot;The accent on everything you did yourself&quot;&gt;
+        &lt;ActivityColourPicker value={themeKey} onChange={setThemeKey} /&gt;
+      &lt;/Card&gt;
+
       &lt;Card title=&quot;Goals&quot;&gt;
         &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot; }}&gt;
           {plan.goals.map((g) =&gt; (
             &lt;span key={g} style={{
               fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 13,
-              padding: &quot;8px 14px&quot;, borderRadius: 0, background: &quot;#0043FF&quot;, color: &quot;#F9F6EE&quot;,
+              padding: &quot;8px 14px&quot;, borderRadius: 0, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;,
             }}&gt;{g}&lt;/span&gt;
           ))}
         &lt;/div&gt;
@@ -5328,7 +5454,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
             &lt;div key={i} style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;flex-start&quot;, gap: 10 }}&gt;
               &lt;div&gt;
                 &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 13, color: &quot;#1B1B1B&quot; }}&gt;
-                  {exercises[q.key]?.label || q.key}{alreadyLogged &amp;&amp; &lt;span style={{ color: &quot;#0043FF&quot;, fontWeight: 500 }}&gt; · already logged&lt;/span&gt;}
+                  {exercises[q.key]?.label || q.key}{alreadyLogged &amp;&amp; &lt;span style={{ color: &quot;var(--activity)&quot;, fontWeight: 500 }}&gt; · already logged&lt;/span&gt;}
                 &lt;/div&gt;
                 &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot; }}&gt;{q.note}&lt;/div&gt;
               &lt;/div&gt;
@@ -5439,6 +5565,8 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
     &lt;/div&gt;
   );
 }
+
+applyTheme(loadThemeKey());
 
 const root = ReactDOM.createRoot(document.getElementById(&quot;root&quot;));
 root.render(&lt;App /&gt;);
