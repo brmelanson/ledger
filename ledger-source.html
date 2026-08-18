@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. Output ceilings are 8000 for import and 6000 for generation, raised after a truncated reply surfaced as a raw JSON.parse error; truncated and unreadable replies are distinguished and phrased via CHEF_ERRORS, and a pause_turn stop reason is resumed by handing the assistant turn back, up to three turns. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette shift in progress: the former blue accent has been renamed to the activity colour and moved behind CSS custom properties --activity and --activity-tint, applied at module load before first paint and switchable live from a picker in the Plan tab (ACTIVITY_THEMES: blue, burnt sienna, burnt umber, ember; stored under the theme key). Activity means the cook's own doing — weight sparkline, sit minutes, chef import frame, annotationStyle handwriting. Outbound links are no longer activity: they are ink #1B1B1B underlined. Remaining fixed palette: yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Watch the activity/rejection collision when picking a final orange. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. Output ceilings are 8000 for import and 6000 for generation, raised after a truncated reply surfaced as a raw JSON.parse error; truncated and unreadable replies are distinguished and phrased via CHEF_ERRORS, and a pause_turn stop reason is resumed by handing the assistant turn back, up to three turns. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette settled: the former blue accent is now the activity colour, ember #C0632A with tint #F7E7D9, held in the --activity and --activity-tint custom properties and applied at module load before first paint (ACTIVITY_COLOR / ACTIVITY_TINT, applyTheme). The four-way trial picker has been removed. Activity means the cook's own doing — weight sparkline, sit minutes, chef import frame, annotationStyle handwriting, protein badge. Outbound links are ink #1B1B1B underlined, not activity. Ember is the closest candidate to the rejection red #BE3B2A, so the two are separated by form as well as hue: activity as strokes, rules and small fills, rejection as bordered panels. Remaining palette: yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Stretches are now ordered shortest hold first via byHoldLength / orderStretches inside stretchesForSession, so equal durations form one contiguous block that can be timed on a watch in a single run; rounds break ties and the sort is stable. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -386,7 +386,6 @@ const STORAGE_LABELS = {
   &quot;meal-plan&quot;: &quot;that meal plan change&quot;,
   &quot;sila&quot;: &quot;that sila marker&quot;,
   &quot;kitchen-rules&quot;: &quot;that kitchen rule&quot;,
-  &quot;theme&quot;: &quot;that colour change&quot;,
   &quot;log-draft&quot;: &quot;the in-progress workout draft&quot;,
 };
 
@@ -840,8 +839,26 @@ function getStretchRecommendation(sessions, cfg) {
 
 // Stretches relevant to today&#x27;s session: everything marked &quot;both&quot;, plus the
 // ones that emphasize the muscles this session actually trains.
+// Shortest holds first, longest last. The point is practical rather than
+// physiological: a run of 30s holds can be timed on the watch once and worked
+// straight through, instead of resetting it between every stretch. Rounds break
+// a tie, so more repetitions also drift later, and Child&#x27;s Pose at 60s ends up
+// where it belongs — at the end.
+//
+// Sort is stable, so within a duration the stretches keep the order they were
+// defined in, and adding one doesn&#x27;t shuffle the rest.
+function byHoldLength(a, b) {
+  const hold = (a.holdSeconds || 0) - (b.holdSeconds || 0);
+  if (hold !== 0) return hold;
+  return (a.baseRounds || 1) - (b.baseRounds || 1);
+}
+
+function orderStretches(list) {
+  return [...list].sort(byHoldLength);
+}
+
 function stretchesForSession(sessionType, allStretches = STRETCHES) {
-  return allStretches.filter((s) =&gt; s.emphasis === &quot;both&quot; || s.emphasis === sessionType);
+  return orderStretches(allStretches.filter((s) =&gt; s.emphasis === &quot;both&quot; || s.emphasis === sessionType));
 }
 
 // Flexibility is the one goal that responds to frequency more than intensity —
@@ -1489,7 +1506,7 @@ function computeCoachSummary(sessions, exercises, plan, sessionType, allStretche
   const rest = assessRestPattern(sessions);
   const balance = assessSessionBalance(sessions, exercises);
   const stretchFreq = assessStretchFrequency(sessions);
-  const stretches = (sessionType ? stretchesForSession(sessionType, allStretches) : allStretches).map((cfg) =&gt; ({
+  const stretches = (sessionType ? stretchesForSession(sessionType, allStretches) : orderStretches(allStretches)).map((cfg) =&gt; ({
     key: cfg.key,
     label: cfg.label,
     cfg,
@@ -2514,46 +2531,28 @@ Respond with ONLY a JSON object, no markdown fence, no preamble:
 // ---------- activity colour ----------
 // One accent carries everything that is the cook&#x27;s own doing: the weight
 // sparkline, the minutes sat, the frame around a recipe being brought in, and
-// their handwriting in the annotation style. Links out are not that — going to
-// someone else&#x27;s site is ink now — and neither is rejection, which keeps its
-// own red.
+// the handwriting in the annotation style. Links out are not that — going to
+// someone else&#x27;s site is ink — and neither is rejection, which keeps its own
+// red.
 //
-// The candidates live here rather than in a stylesheet so the whole set can be
-// tried against real data on the phone. The two reds are worth watching: brick
-// #BE3B2A is rejection, and an orange that drifts too close to it makes &quot;the
-// weight I lifted&quot; and &quot;never again&quot; the same colour at a glance.
-const ACTIVITY_THEMES = [
-  { key: &quot;blue&quot;, label: &quot;Blue&quot;, note: &quot;What&#x27;s there now&quot;, color: &quot;#0043FF&quot;, tint: &quot;#E4E9FF&quot; },
-  { key: &quot;sienna&quot;, label: &quot;Burnt sienna&quot;, note: &quot;Earth pigment, mid weight&quot;, color: &quot;#A6522C&quot;, tint: &quot;#F3E3D8&quot; },
-  { key: &quot;umber&quot;, label: &quot;Burnt umber&quot;, note: &quot;Darkest, furthest from the red&quot;, color: &quot;#8A4A22&quot;, tint: &quot;#F0E3D6&quot; },
-  { key: &quot;ember&quot;, label: &quot;Ember&quot;, note: &quot;Brightest, closest to the red&quot;, color: &quot;#C0632A&quot;, tint: &quot;#F7E7D9&quot; },
-];
+// Ember, chosen off the trial. It sits in the same earth-pigment family as the
+// rest of the palette, which the old #0043FF never did: that blue was the only
+// colour here that couldn&#x27;t exist as ink on paper. It is the closest of the
+// candidates to the rejection red at #BE3B2A, so the two are kept apart by
+// form as well as hue — activity appears as strokes, rules and small fills,
+// rejection as bordered panels.
+//
+// It stays behind a custom property rather than being pasted into 48 style
+// objects, so the next change to it is one line.
+const ACTIVITY_COLOR = &quot;#C0632A&quot;;
+const ACTIVITY_TINT = &quot;#F7E7D9&quot;;
 
-function themeByKey(key) {
-  return ACTIVITY_THEMES.find((t) =&gt; t.key === key) || ACTIVITY_THEMES[0];
-}
-
-function applyTheme(key) {
-  const t = themeByKey(key);
+function applyTheme() {
   try {
-    document.documentElement.style.setProperty(&quot;--activity&quot;, t.color);
-    document.documentElement.style.setProperty(&quot;--activity-tint&quot;, t.tint);
+    document.documentElement.style.setProperty(&quot;--activity&quot;, ACTIVITY_COLOR);
+    document.documentElement.style.setProperty(&quot;--activity-tint&quot;, ACTIVITY_TINT);
   } catch (e) {}
-  return t.key;
 }
-
-// Read and apply before React paints, so the app never flashes an unset
-// variable on launch.
-function loadThemeKey() {
-  try {
-    const raw = lsGet(&quot;theme&quot;);
-    return raw ? themeByKey(JSON.parse(raw.value)).key : &quot;blue&quot;;
-  } catch (e) {
-    return &quot;blue&quot;;
-  }
-}
-
-async function saveThemeKey(key) { lsSet(&quot;theme&quot;, JSON.stringify(key)); }
 
 
 // ---------- sila period (annual training period) ----------
@@ -2893,7 +2892,6 @@ function App() {
   const [mealPlan, setMealPlan] = useState([]);
   const [sila, setSila] = useState({});
   const [kitchenRules, setKitchenRules] = useState(SEED_RULES);
-  const [themeKey, setThemeKeyState] = useState(loadThemeKey);
   const [saveWarning, setSaveWarning] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState(&quot;&quot;);
@@ -2947,11 +2945,6 @@ function App() {
   // One subscriber for every refused write in the app. The write layer names
   // the thing that didn&#x27;t stick; this puts it on screen once, wherever he is.
   useEffect(() =&gt; onStorageFailure((what) =&gt; setSaveWarning(what)), []);
-
-  const setThemeKey = useCallback((key) =&gt; {
-    setThemeKeyState(applyTheme(key));
-    saveThemeKey(key);
-  }, []);
 
   const updateKitchenRules = useCallback((updater) =&gt; {
     setKitchenRules((prev) =&gt; {
@@ -3149,7 +3142,7 @@ function App() {
         ) : tab === &quot;history&quot; ? (
           &lt;HistoryTab sessions={sessions} exercises={exercises} allStretches={stretches} recipes={recipes} mealPlan={mealPlan} /&gt;
         ) : (
-          &lt;PlanTab themeKey={themeKey} setThemeKey={setThemeKey} plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} /&gt;
+          &lt;PlanTab plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} /&gt;
         )}
 
         {toast &amp;&amp; (
@@ -5235,76 +5228,7 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
   );
 }
 
-// Judging a colour needs it next to the two things it can collide with — the
-// rejection red and the ink — and on top of a real progression line rather
-// than a swatch.
-function ActivityColourPicker({ value, onChange }) {
-  const demo = [95, 95, 100, 100, 105, 105, 110, 115, 115, 120];
-  return (
-    &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 14, marginTop: 6 }}&gt;
-      &lt;div style={{ border: &quot;2px solid #1B1B1B&quot;, padding: 12 }}&gt;
-        &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;baseline&quot;, marginBottom: 4 }}&gt;
-          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;
-            Sample progression
-          &lt;/div&gt;
-          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 13, color: &quot;var(--activity)&quot;, fontWeight: 600 }}&gt;
-            120 lb
-          &lt;/div&gt;
-        &lt;/div&gt;
-        &lt;Sparkline data={demo} width={320} height={56} /&gt;
-        &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginTop: 10, flexWrap: &quot;wrap&quot; }}&gt;
-          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;var(--activity)&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
-            activity
-          &lt;/span&gt;
-          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;#BE3B2A&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
-            rejection
-          &lt;/span&gt;
-          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;#FFC400&quot;, color: &quot;#1B1B1B&quot;, padding: &quot;2px 6px&quot; }}&gt;
-            alternate day
-          &lt;/span&gt;
-          &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, background: &quot;#2F6B4F&quot;, color: &quot;#F9F6EE&quot;, padding: &quot;2px 6px&quot; }}&gt;
-            advisory
-          &lt;/span&gt;
-        &lt;/div&gt;
-        &lt;div style={{ ...annotationStyle, marginTop: 12 }}&gt;
-          Your own note reads in this colour too — cut the soy sauce by half.
-        &lt;/div&gt;
-      &lt;/div&gt;
-
-      &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
-        {ACTIVITY_THEMES.map((t) =&gt; {
-          const on = t.key === value;
-          return (
-            &lt;button key={t.key} onClick={() =&gt; onChange(t.key)} style={{
-              display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 12, textAlign: &quot;left&quot;, cursor: &quot;pointer&quot;,
-              border: on ? &quot;2.5px solid #1B1B1B&quot; : &quot;2px solid #D8D0BF&quot;,
-              background: on ? &quot;#EFE9DC&quot; : &quot;#F9F6EE&quot;, padding: &quot;10px 12px&quot;,
-            }}&gt;
-              &lt;span style={{ width: 26, height: 26, background: t.color, flex: &quot;0 0 auto&quot;, border: &quot;1.5px solid #1B1B1B&quot; }} /&gt;
-              &lt;span style={{ flex: 1 }}&gt;
-                &lt;span style={{ display: &quot;block&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, fontWeight: on ? 700 : 500, color: &quot;#1B1B1B&quot; }}&gt;
-                  {t.label}
-                &lt;/span&gt;
-                &lt;span style={{ display: &quot;block&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, marginTop: 2 }}&gt;
-                  {t.note}
-                &lt;/span&gt;
-              &lt;/span&gt;
-              &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, color: &quot;#6E6759&quot;, textTransform: &quot;uppercase&quot;, letterSpacing: 0.6 }}&gt;
-                {on ? &quot;On&quot; : &quot;&quot;}
-              &lt;/span&gt;
-            &lt;/button&gt;
-          );
-        })}
-      &lt;/div&gt;
-
-      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, lineHeight: 1.6 }}&gt;
-        Changes everything at once — the graph, the sit minutes, the chef frame, your annotations. Live, so it&#x27;s worth checking the Today and History tabs before deciding.
-      &lt;/div&gt;
-    &lt;/div&gt;
-  );
-}
-
-function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, themeKey, setThemeKey }) {
+function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [newEx, setNewEx] = useState({ label: &quot;&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 5, noWeight: false, toChamber: false, sessionType: &quot;both&quot; });
@@ -5417,10 +5341,6 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
           Whenever you get an updated version of this file from me, export first, open the new file, then import — it carries sessions, plan, exercises, stretches, recipes, meal plan and practice entries. If the download does not start (some phones block it from a local file), use Show as text and copy it into a note instead.
           &lt;/div&gt;
       &lt;/Card&gt;
-      &lt;Card title=&quot;Activity colour&quot; sub=&quot;The accent on everything you did yourself&quot;&gt;
-        &lt;ActivityColourPicker value={themeKey} onChange={setThemeKey} /&gt;
-      &lt;/Card&gt;
-
       &lt;Card title=&quot;Goals&quot;&gt;
         &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot; }}&gt;
           {plan.goals.map((g) =&gt; (
@@ -5566,7 +5486,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
   );
 }
 
-applyTheme(loadThemeKey());
+applyTheme();
 
 const root = ReactDOM.createRoot(document.getElementById(&quot;root&quot;));
 root.render(&lt;App /&gt;);
