@@ -387,6 +387,7 @@ const STORAGE_LABELS = {
   &quot;sila&quot;: &quot;that sila marker&quot;,
   &quot;kitchen-rules&quot;: &quot;that kitchen rule&quot;,
   &quot;log-draft&quot;: &quot;the in-progress workout draft&quot;,
+  &quot;teachings&quot;: &quot;that teaching&quot;,
 };
 
 // A refused write is silent by default. setItem throws when the quota is full,
@@ -616,11 +617,21 @@ async function loadState() {
     const mealPlan = mp ? JSON.parse(mp.value) : SEED_MEAL_PLAN;
     const sl = lsGet(&quot;sila&quot;);
     const sila = sl ? JSON.parse(sl.value) : {};
+    // Parsed on its own rather than inside the shared try: a malformed
+    // teachings blob should cost the teachings, not send every other section
+    // back to its seed data for the rest of the session.
+    let teachings = [];
+    try {
+      const tg = lsGet(TEACHINGS_KEY);
+      const parsed = tg ? JSON.parse(tg.value) : [];
+      if (Array.isArray(parsed)) teachings = parsed;
+    } catch (e) {}
     const kr = lsGet(&quot;kitchen-rules&quot;);
     const kitchenRules = kr ? mergeRules(JSON.parse(kr.value)) : SEED_RULES;
     return {
       sila,
       kitchenRules,
+      teachings,
       sessions: s ? JSON.parse(s.value) : SEED_SESSIONS,
       plan: p ? mergePlan(JSON.parse(p.value)) : null,
       practice,
@@ -630,7 +641,7 @@ async function loadState() {
       mealPlan,
     };
   } catch (e) {
-    return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN, sila: {}, kitchenRules: SEED_RULES };
+    return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN, sila: {}, kitchenRules: SEED_RULES, teachings: [] };
   }
 }
 async function saveSessions(sessions) { lsSet(&quot;sessions&quot;, JSON.stringify(sessions)); }
@@ -642,6 +653,7 @@ async function saveRecipes(recipes) { lsSet(&quot;recipes-config&quot;, JSON.str
 async function saveMealPlan(mealPlan) { lsSet(&quot;meal-plan&quot;, JSON.stringify(mealPlan)); }
 async function saveSila(sila) { lsSet(&quot;sila&quot;, JSON.stringify(sila)); }
 async function saveKitchenRules(rules) { lsSet(&quot;kitchen-rules&quot;, JSON.stringify(rules)); }
+async function saveTeachings(teachings) { lsSet(TEACHINGS_KEY, JSON.stringify(teachings)); }
 
 function getApiKey() {
   try { return localStorage.getItem(&quot;ledger:api-key&quot;) || &quot;&quot;; } catch (e) { return &quot;&quot;; }
@@ -2458,10 +2470,12 @@ const PRACTICE_POINTERS = [
 ];
 
 function pointerPool(type) {
-  const general = PRACTICE_POINTERS.filter((p) =&gt; !p.types);
+  // Imported passages lead each pool; the built-in prompts sit underneath until
+  // enough have been imported for that slot to stand on its own.
+  const general = blendedPool(importedGeneral(), PRACTICE_POINTERS.filter((p) =&gt; !p.types), LIBRARY_FULL.general);
   if (!type) return general;
-  const matched = PRACTICE_POINTERS.filter((p) =&gt; p.types &amp;&amp; p.types.indexOf(type) !== -1);
-  // Type-specific pointers are few, so blend them with the general pool rather
+  const matched = blendedPool(importedForType(type), PRACTICE_POINTERS.filter((p) =&gt; p.types &amp;&amp; p.types.indexOf(type) !== -1), LIBRARY_FULL.type);
+  // Type-specific pointers are few, so fall back to the general pool rather
   // than showing the same handful every time he picks that practice.
   return matched.length ? matched : general;
 }
@@ -2685,13 +2699,19 @@ function dailyPointerFor(dateStr, type, offset) {
     // this pool, and the year term keeps next September from repeating this one.
     const d = period.dayIndex + off;
     const ordinal = Math.floor(d / 3) * 2 + (d % 3) + period.year * 11;
-    const p = pointerFromPool(SILA_POINTERS, ordinal);
+    const p = pointerFromPool(silaPool(), ordinal);
     if (p) return p;
   }
-  // The interwoven third still indexes by date, which is fine only because the
-  // general pool&#x27;s length isn&#x27;t a multiple of 3. If it ever becomes one, this
-  // line starts showing a third of the library and hiding the rest — give it
-  // the same ordinal treatment as above.
+  if (period) {
+    // The interwoven third used to index by date, which only held while the
+    // general pool&#x27;s length happened not to be a multiple of 3. The pool grows
+    // with every import now, so that assumption can&#x27;t be relied on: this day
+    // gets the same ordinal treatment, counting the days that actually draw
+    // from this pool rather than the calendar.
+    const d = period.dayIndex + off;
+    const p = pointerFromPool(pointerPool(type), Math.floor(d / 3) + period.year * 5);
+    if (p) return p;
+  }
   return pointerForDate(dateStr, pointerPool(type), off);
 }
 
@@ -2704,6 +2724,405 @@ function preceptOfDay(dateStr) {
   const p = dailyPointerFor(dateStr, null, 0);
   if (p &amp;&amp; p.precept) return p.precept;
   return (period.dayIndex % PRECEPTS.length) + 1;
+}
+
+// ---------- imported teachings ----------
+// The built-in pointer library is written in this app&#x27;s own voice — useful, but
+// not the teaching itself. A teaching imported from a URL is stored whole, in
+// reading order, in the teacher&#x27;s own words, and the daily pointer draws its
+// lines from that. The built-in pool stays underneath as a floor so the Practice
+// tab is never blank, and retires slot by slot as the imported library fills.
+const TEACHINGS_KEY = &quot;teachings&quot;;
+
+// A dharma talk transcript runs 3–6k words. The cap is generous enough for a
+// long sutta and low enough that one bad import can&#x27;t eat the storage quota
+// every other feature shares.
+const TEACHING_CHAR_CAP = 80000;
+
+// Counts at which the built-in pointers stop being mixed in. Held per slot,
+// because the type-matched journal prompts fill far more slowly than the
+// general daily pointer does.
+const LIBRARY_FULL = { general: 20, type: 8, sila: 15 };
+
+// Pool functions are called from components scattered across the tree — the
+// daily pointer, the journal prompt inside the wizard, the sila prompt — and
+// threading a teachings prop through all of them would mean touching every
+// component in between. The list is mirrored here instead and refreshed
+// whenever the state that owns it changes, so a re-render always reads current
+// data. App state remains the single source of truth; this is a read cache.
+let IMPORTED_TEACHINGS: any[] = [];
+function setImportedTeachings(list) {
+  IMPORTED_TEACHINGS = Array.isArray(list) ? list : [];
+}
+
+// Flatten every teaching&#x27;s pointer-worthy segments into one list, each carrying
+// its own attribution so a line can always be traced back to who said it.
+function teachingPassages() {
+  const out: any[] = [];
+  for (const t of IMPORTED_TEACHINGS) {
+    const segs = (t &amp;&amp; t.segments) || [];
+    for (let i = 0; i &lt; segs.length; i++) {
+      const s = segs[i];
+      if (!s || !s.pointer || !s.text) continue;
+      out.push({
+        theme: s.theme || &quot;Teaching&quot;,
+        text: s.text,
+        source: [t.author, t.work || t.title].filter(Boolean).join(&quot; \u2014 &quot;),
+        url: t.url || null,
+        types: s.types,
+        precept: s.precept,
+      });
+    }
+  }
+  return out;
+}
+
+function importedGeneral() {
+  return teachingPassages().filter((p) =&gt; !p.types &amp;&amp; p.precept === undefined);
+}
+function importedForType(type) {
+  return teachingPassages().filter((p) =&gt; p.types &amp;&amp; p.types.indexOf(type) !== -1);
+}
+function importedSila() {
+  return teachingPassages().filter((p) =&gt; p.precept !== undefined);
+}
+
+// Below the threshold the two pools are shown together, so an imported line
+// starts appearing the day it arrives instead of waiting for a quota. At or
+// above it the built-ins drop out of that slot entirely.
+function blendedPool(imported, builtin, threshold) {
+  return imported.length &gt;= threshold ? imported : imported.concat(builtin);
+}
+
+function silaPool() {
+  return blendedPool(importedSila(), SILA_POINTERS, LIBRARY_FULL.sila);
+}
+
+// How full each slot is, for the readout on the Practice tab.
+function libraryStatus() {
+  return {
+    sources: IMPORTED_TEACHINGS.length,
+    passages: teachingPassages().length,
+    generalFull: importedGeneral().length &gt;= LIBRARY_FULL.general,
+    silaFull: importedSila().length &gt;= LIBRARY_FULL.sila,
+  };
+}
+
+// ---------- importing ----------
+const TEACHING_SYSTEM = `You are importing a Buddhist teaching into a practitioner&#x27;s personal practice journal. You are an extractor, not an author.
+
+Absolute rules:
+- Every word you place in &quot;segments&quot; must be the teacher&#x27;s own words, copied verbatim from the page. Do not paraphrase, summarise, modernise, condense or compose. If you cannot copy it, leave it out.
+- Add no commentary, framing or pointers of your own. Not one sentence.
+- Skip navigation, headers, footers, donation appeals, comment threads, copyright notices and audio player text.
+
+Return ONLY a JSON object. No preamble, no markdown fences:
+{
+  &quot;title&quot;: &quot;the title as the page gives it&quot;,
+  &quot;author&quot;: &quot;the teacher, or the translator, as the page names them&quot;,
+  &quot;work&quot;: &quot;sutta reference or collection if the page gives one, otherwise null&quot;,
+  &quot;segments&quot;: [
+    { &quot;text&quot;: &quot;verbatim text&quot;, &quot;pointer&quot;: true, &quot;theme&quot;: &quot;Attitude&quot;, &quot;types&quot;: [&quot;breath&quot;], &quot;precept&quot;: 4 }
+  ]
+}
+
+The segments must cover the whole teaching in reading order, so that joining them back together reproduces it. Break at paragraph boundaries. Keep each segment under roughly 90 words, splitting a long paragraph at sentence boundaries.
+
+For each segment:
+- &quot;pointer&quot;: true only when the segment stands on its own as something worth holding in mind during a sit. Narrative setup, retreat logistics, asides and sentences that need the previous one to make sense are false. Expect roughly a quarter to a third to be true.
+- &quot;theme&quot;: two or three words naming what it concerns — Attitude, Effort, Hindrances, Metta, Impermanence and so on. Only on segments where pointer is true.
+- &quot;types&quot;: only when the segment speaks to one specific practice. Allowed: &quot;breath&quot;, &quot;bodyScan&quot;, &quot;metta&quot;, &quot;open&quot;. Omit otherwise.
+- &quot;precept&quot;: only when the segment concerns ethical conduct. 1 harming, 2 taking what is not given, 3 sexual misconduct, 4 false speech, 5 intoxicants, 0 for virtue in general. Omit otherwise.
+
+If the page is not a Buddhist teaching, return {&quot;error&quot;:&quot;not a teaching&quot;}.`;
+
+async function fetchTeaching(url) {
+  const key = getApiKey();
+  if (!key) throw new Error(&quot;no-key&quot;);
+  const call = (messages) =&gt;
+    fetch(&quot;https://api.anthropic.com/v1/messages&quot;, {
+      method: &quot;POST&quot;,
+      headers: {
+        &quot;Content-Type&quot;: &quot;application/json&quot;,
+        &quot;x-api-key&quot;: key,
+        &quot;anthropic-version&quot;: &quot;2023-06-01&quot;,
+        &quot;anthropic-dangerous-direct-browser-access&quot;: &quot;true&quot;,
+      },
+      body: JSON.stringify({
+        model: &quot;claude-sonnet-4-6&quot;,
+        // The whole talk comes back segmented, so the reply is about as long as
+        // the talk itself. A 4,000-word transcript lands near 12k tokens.
+        max_tokens: 16000,
+        system: TEACHING_SYSTEM,
+        tools: [{
+          type: &quot;web_fetch_20250910&quot;,
+          name: &quot;web_fetch&quot;,
+          max_uses: 3,
+          max_content_tokens: 40000,
+        }],
+        messages,
+      }),
+    });
+
+  let messages: any[] = [{ role: &quot;user&quot;, content: &quot;Import the teaching at &quot; + url }];
+  let blocks: any[] = [];
+  let stop: any = null;
+  // Same pause_turn handling as the recipe import: a server-side fetch can
+  // return early expecting the conversation handed straight back.
+  for (let turn = 0; turn &lt; 3; turn++) {
+    const response = await call(messages);
+    if (!response.ok) throw new Error(`API error ${response.status}`);
+    const data = await response.json();
+    blocks = blocks.concat(data.content || []);
+    stop = data.stop_reason;
+    if (stop === &quot;pause_turn&quot;) {
+      messages = messages.concat([{ role: &quot;assistant&quot;, content: data.content }]);
+      continue;
+    }
+    break;
+  }
+  const fetchError = blocks
+    .filter((c) =&gt; c.type === &quot;web_fetch_tool_result&quot;)
+    .map((c) =&gt; c.content &amp;&amp; c.content.error_code)
+    .find(Boolean);
+  if (fetchError) throw new Error(&quot;fetch:&quot; + fetchError);
+
+  const text = blocks.filter((c) =&gt; c.type === &quot;text&quot;).map((c) =&gt; c.text).join(&quot;&quot;);
+  const cleaned = text.replace(/```json/g, &quot;&quot;).replace(/```/g, &quot;&quot;).trim();
+  const first = cleaned.indexOf(&quot;{&quot;);
+  const last = cleaned.lastIndexOf(&quot;}&quot;);
+  if (first &lt; 0 || last &lt; 0) throw new Error(stop === &quot;max_tokens&quot; ? &quot;truncated&quot; : &quot;unreadable&quot;);
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned.slice(first, last + 1));
+  } catch (e) {
+    throw new Error(stop === &quot;max_tokens&quot; ? &quot;truncated&quot; : &quot;unreadable&quot;);
+  }
+  if (parsed &amp;&amp; parsed.error) throw new Error(&quot;not-a-teaching&quot;);
+
+  const segsIn = Array.isArray(parsed.segments) ? parsed.segments : [];
+  // Trust nothing about the shape coming back. A stray precept of 9 or a types
+  // value the app has never heard of would sit in storage forever and quietly
+  // route a passage into a pool that never surfaces it.
+  const TYPES = [&quot;breath&quot;, &quot;bodyScan&quot;, &quot;metta&quot;, &quot;open&quot;];
+  const segments: any[] = [];
+  let chars = 0;
+  for (const s of segsIn) {
+    const t = typeof s?.text === &quot;string&quot; ? s.text.trim() : &quot;&quot;;
+    if (!t) continue;
+    chars += t.length;
+    if (chars &gt; TEACHING_CHAR_CAP) break;
+    const seg: any = { text: t, pointer: s.pointer === true };
+    if (seg.pointer &amp;&amp; typeof s.theme === &quot;string&quot; &amp;&amp; s.theme.trim()) seg.theme = s.theme.trim();
+    const types = Array.isArray(s.types) ? s.types.filter((x) =&gt; TYPES.indexOf(x) !== -1) : [];
+    if (types.length) seg.types = types;
+    if (typeof s.precept === &quot;number&quot; &amp;&amp; s.precept &gt;= 0 &amp;&amp; s.precept &lt;= 5) seg.precept = s.precept;
+    segments.push(seg);
+  }
+  if (!segments.length) throw new Error(&quot;empty&quot;);
+
+  return {
+    id: Date.now(),
+    url,
+    title: (typeof parsed.title === &quot;string&quot; &amp;&amp; parsed.title.trim()) || url,
+    author: (typeof parsed.author === &quot;string&quot; &amp;&amp; parsed.author.trim()) || &quot;Unattributed&quot;,
+    work: (typeof parsed.work === &quot;string&quot; &amp;&amp; parsed.work.trim()) || null,
+    addedAt: localDateStr(),
+    truncated: chars &gt; TEACHING_CHAR_CAP,
+    segments,
+  };
+}
+
+const TEACHING_ERRORS = {
+  &quot;no-key&quot;: &quot;No API key saved yet \u2014 add one under Plan \u00B7 Settings first.&quot;,
+  &quot;not-a-teaching&quot;: &quot;That page didn&#x27;t read as a teaching. Check the link points at the talk itself.&quot;,
+  truncated: &quot;That talk came back longer than there was room for. Try a single talk rather than a whole collection page.&quot;,
+  unreadable: &quot;The reply came back garbled. Worth trying once more.&quot;,
+  empty: &quot;Nothing readable came off that page.&quot;,
+};
+
+// ---------- the teachings card on the Practice tab ----------
+function TeachingsCard({ teachings, setTeachings }) {
+  const [url, setUrl] = useState(&quot;&quot;);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(&quot;&quot;);
+  const [note, setNote] = useState(&quot;&quot;);
+  const [openId, setOpenId] = useState(null);
+  const [confirmId, setConfirmId] = useState(null);
+  const status = libraryStatus();
+
+  const runImport = async () =&gt; {
+    const u = url.trim();
+    if (!u) return;
+    if (!/^https?:\/\//i.test(u)) { setErr(&quot;That needs to start with http:// or https://&quot;); return; }
+    if (teachings.some((t) =&gt; t.url === u)) { setErr(&quot;That link is already in the library.&quot;); return; }
+    setBusy(true); setErr(&quot;&quot;); setNote(&quot;&quot;);
+    try {
+      const t = await fetchTeaching(u);
+      setTeachings((prev) =&gt; [t, ...prev]);
+      setUrl(&quot;&quot;);
+      const kept = t.segments.filter((s) =&gt; s.pointer).length;
+      setNote(`Added &quot;${t.title}&quot; \u2014 ${t.segments.length} passages, ${kept} in the rotation.`);
+    } catch (e: any) {
+      const m = String(e &amp;&amp; e.message ? e.message : e);
+      setErr(
+        m.slice(0, 6) === &quot;fetch:&quot;
+          ? (FETCH_ERRORS[m.slice(6)] || &quot;That page couldn&#x27;t be read.&quot;)
+          : (TEACHING_ERRORS[m] || &quot;That import didn&#x27;t go through. Worth trying once more.&quot;)
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = (id) =&gt; {
+    setTeachings((prev) =&gt; prev.filter((t) =&gt; t.id !== id));
+    setConfirmId(null);
+    if (openId === id) setOpenId(null);
+  };
+
+  const mono = { fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot; };
+
+  // Collapsed by default. This is a library, not a daily reading — the tab it
+  // sits on is for logging a sit, and a growing list of talks would push that
+  // below the fold within a fortnight.
+  const [open, setOpen] = useState(false);
+
+  return (
+    &lt;div style={{ background: &quot;#F9F6EE&quot;, border: &quot;2.5px solid #1B1B1B&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, borderRadius: 0 }}&gt;
+      &lt;div
+        onClick={() =&gt; setOpen((o) =&gt; !o)}
+        style={{ padding: &quot;16px 18px&quot;, cursor: &quot;pointer&quot;, display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot;, gap: 12 }}
+      &gt;
+        &lt;div&gt;
+          &lt;div style={{ ...mono, fontSize: 11, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;Teachings&lt;/div&gt;
+          &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 24, fontWeight: 800, letterSpacing: -0.8, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot;, marginTop: 2 }}&gt;
+            {status.passages} passage{status.passages === 1 ? &quot;&quot; : &quot;s&quot;}
+          &lt;/div&gt;
+          &lt;div style={{ ...mono, fontSize: 10.5, color: &quot;#6E6759&quot;, marginTop: 3 }}&gt;
+            {status.sources} SOURCE{status.sources === 1 ? &quot;&quot; : &quot;S&quot;} · {status.generalFull ? &quot;LIBRARY CARRYING&quot; : &quot;BUILT-INS FILLING IN&quot;}
+          &lt;/div&gt;
+        &lt;/div&gt;
+        &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 26, fontWeight: 800, color: &quot;#1B1B1B&quot;, lineHeight: 1 }}&gt;{open ? &quot;\u2013&quot; : &quot;+&quot;}&lt;/div&gt;
+      &lt;/div&gt;
+
+      {open &amp;&amp; (
+      &lt;div style={{ padding: &quot;0 18px 18px&quot;, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 16 }}&gt;
+      &lt;div&gt;
+        &lt;input
+          value={url}
+          onChange={(e) =&gt; setUrl(e.target.value)}
+          placeholder=&quot;https://suttacentral.net/...&quot;
+          style={{ width: &quot;100%&quot;, boxSizing: &quot;border-box&quot;, borderRadius: 0, border: &quot;2px solid #1B1B1B&quot;, padding: &quot;10px 12px&quot;, fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12.5, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot; }}
+        /&gt;
+        &lt;button
+          onClick={runImport}
+          disabled={busy}
+          style={{ ...btnPrimary, marginTop: 10, width: &quot;100%&quot;, justifyContent: &quot;center&quot;, opacity: busy ? 0.55 : 1 }}
+        &gt;
+          {busy ? &quot;Reading the page\u2026&quot; : &quot;Import teaching&quot;}
+        &lt;/button&gt;
+        {err &amp;&amp; (
+          &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#BE3B2A&quot;, marginTop: 10, lineHeight: 1.5 }}&gt;{err}&lt;/div&gt;
+        )}
+        {note &amp;&amp; !err &amp;&amp; (
+          &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#2F6B4F&quot;, marginTop: 10, lineHeight: 1.5 }}&gt;{note}&lt;/div&gt;
+        )}
+      &lt;/div&gt;
+
+      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot;, lineHeight: 1.6, borderTop: &quot;2px solid #D8D0BF&quot;, paddingTop: 12 }}&gt;
+        {status.generalFull
+          ? &quot;The library carries the daily pointer on its own now \u2014 the built-in prompts have stepped back.&quot;
+          : `Built-in prompts are still filling the gaps. ${Math.max(0, LIBRARY_FULL.general - importedGeneral().length)} more imported passages and they retire.`}
+      &lt;/div&gt;
+
+      {teachings.length === 0 ? (
+        &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#6E6759&quot;, lineHeight: 1.6 }}&gt;
+          Nothing imported yet. suttacentral.net, dhammatalks.org, accesstoinsight.org, forestsangha.org and bswa.org all read cleanly.
+        &lt;/div&gt;
+      ) : (
+        &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 12 }}&gt;
+          {teachings.map((t) =&gt; {
+            const open = openId === t.id;
+            const kept = t.segments.filter((s) =&gt; s.pointer).length;
+            return (
+              &lt;div key={t.id} style={{ border: &quot;2px solid #1B1B1B&quot;, background: &quot;#F9F6EE&quot;, padding: &quot;12px 14px&quot; }}&gt;
+                &lt;div
+                  onClick={() =&gt; setOpenId(open ? null : t.id)}
+                  style={{ cursor: &quot;pointer&quot; }}
+                &gt;
+                  &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 14, fontWeight: 600, color: &quot;#1B1B1B&quot;, lineHeight: 1.4 }}&gt;{t.title}&lt;/div&gt;
+                  &lt;div style={{ ...mono, fontSize: 11, color: &quot;#6E6759&quot;, marginTop: 4 }}&gt;
+                    {t.author}{t.work ? &quot; \u00B7 &quot; + t.work : &quot;&quot;}
+                  &lt;/div&gt;
+                  &lt;div style={{ ...mono, fontSize: 10.5, color: &quot;#6E6759&quot;, marginTop: 3 }}&gt;
+                    {t.segments.length} PASSAGES · {kept} IN ROTATION · ADDED {t.addedAt}
+                  &lt;/div&gt;
+                &lt;/div&gt;
+
+                {open &amp;&amp; (
+                  &lt;div style={{ marginTop: 12, borderTop: &quot;2px solid #D8D0BF&quot;, paddingTop: 12 }}&gt;
+                    &lt;div style={{ maxHeight: 340, overflowY: &quot;auto&quot;, paddingRight: 4 }}&gt;
+                      {t.segments.map((s, i) =&gt; (
+                        &lt;div
+                          key={i}
+                          style={{
+                            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13.5, lineHeight: 1.65,
+                            color: s.pointer ? &quot;#1B1B1B&quot; : &quot;#6E6759&quot;,
+                            borderLeft: s.pointer ? &quot;3px solid #C0632A&quot; : &quot;3px solid transparent&quot;,
+                            paddingLeft: 10, marginBottom: 10,
+                          }}
+                        &gt;
+                          {s.text}
+                        &lt;/div&gt;
+                      ))}
+                    &lt;/div&gt;
+                    {t.truncated &amp;&amp; (
+                      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#BE3B2A&quot;, marginTop: 6 }}&gt;
+                        This one was long enough to be cut short. The stored part is above.
+                      &lt;/div&gt;
+                    )}
+                    &lt;div style={{ display: &quot;flex&quot;, gap: 8, marginTop: 12, flexWrap: &quot;wrap&quot; }}&gt;
+                      {t.url &amp;&amp; (
+                        &lt;a href={t.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{ ...btnGhost, textDecoration: &quot;none&quot;, fontSize: 13, padding: &quot;8px 14px&quot; }}&gt;
+                          Open source
+                        &lt;/a&gt;
+                      )}
+                      {confirmId === t.id ? (
+                        &lt;&gt;
+                          &lt;button onClick={() =&gt; remove(t.id)} style={{ ...btnGhost, fontSize: 13, padding: &quot;8px 14px&quot;, borderColor: &quot;#BE3B2A&quot;, color: &quot;#BE3B2A&quot; }}&gt;
+                            Remove for good
+                          &lt;/button&gt;
+                          &lt;button onClick={() =&gt; setConfirmId(null)} style={{ ...btnGhost, fontSize: 13, padding: &quot;8px 14px&quot; }}&gt;Keep&lt;/button&gt;
+                        &lt;/&gt;
+                      ) : (
+                        &lt;button onClick={() =&gt; setConfirmId(t.id)} style={{ ...btnGhost, fontSize: 13, padding: &quot;8px 14px&quot;, color: &quot;#6E6759&quot;, borderColor: &quot;#D8D0BF&quot; }}&gt;
+                          Remove
+                        &lt;/button&gt;
+                      )}
+                    &lt;/div&gt;
+                  &lt;/div&gt;
+                )}
+              &lt;/div&gt;
+            );
+          })}
+        &lt;/div&gt;
+      )}
+      &lt;/div&gt;
+      )}
+    &lt;/div&gt;
+  );
+}
+
+// The sila journal prompt used to close with a question written in this app&#x27;s
+// voice. When the library holds something a teacher actually said about the
+// precept in view, that goes there instead, and the written question drops back
+// to being the floor.
+function preceptPassage(dateStr, n) {
+  const pool = importedSila().filter((p) =&gt; p.precept === n || p.precept === 0);
+  if (!pool.length) return null;
+  const days = Math.floor(Date.parse(dateStr + &quot;T00:00:00&quot;) / 86400000);
+  return pointerFromPool(pool, Number.isFinite(days) ? days : 0);
 }
 
 function DailyPointer() {
@@ -2727,8 +3146,13 @@ function DailyPointer() {
         &lt;/button&gt;
       &lt;/div&gt;
       &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 15, lineHeight: 1.65, color: &quot;#1B1B1B&quot;, marginTop: 10 }}&gt;{p.text}&lt;/div&gt;
-      {p.source &amp;&amp; (
-        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot;, marginTop: 10 }}&gt;{p.source}&lt;/div&gt;
+      {(p.source || p.url) &amp;&amp; (
+        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot;, marginTop: 10 }}&gt;
+          {p.source}
+          {p.url &amp;&amp; (
+            &lt;a href={p.url} target=&quot;_blank&quot; rel=&quot;noreferrer&quot; style={{ color: &quot;#6E6759&quot;, marginLeft: p.source ? 8 : 0 }}&gt;Source&lt;/a&gt;
+          )}
+        &lt;/div&gt;
       )}
     &lt;/div&gt;
   );
@@ -2745,7 +3169,7 @@ function PointerPrompt({ type }) {
   );
 }
 
-function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
+function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry, teachings = [], setTeachings }) {
   const [editingId, setEditingId] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
 
@@ -2778,6 +3202,8 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
       &lt;/div&gt;
 
       &lt;DailyPointer /&gt;
+
+      &lt;TeachingsCard teachings={teachings} setTeachings={setTeachings} /&gt;
 
       {practice.length === 0 ? (
         &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, color: &quot;#6E6759&quot;, textAlign: &quot;center&quot;, padding: &quot;20px 0&quot; }}&gt;
@@ -2894,6 +3320,7 @@ function App() {
   const [kitchenRules, setKitchenRules] = useState(SEED_RULES);
   const [saveWarning, setSaveWarning] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [teachings, setTeachings] = useState([]);
   const [apiKeyInput, setApiKeyInput] = useState(&quot;&quot;);
   const [hasKey, setHasKey] = useState(false);
 
@@ -2904,7 +3331,7 @@ function App() {
   }, []);
 
   useEffect(() =&gt; {
-    loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp, sila: sl, kitchenRules: kr }) =&gt; {
+    loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp, sila: sl, kitchenRules: kr, teachings: tg }) =&gt; {
       setSessions(s);
       if (p) setPlan(p);
       setPractice(pr || []);
@@ -2914,10 +3341,22 @@ function App() {
       setMealPlan(mp || []);
       setSila(sl || {});
       setKitchenRules(Array.isArray(kr) ? kr : SEED_RULES);
+      setTeachings(Array.isArray(tg) ? tg : []);
+      setImportedTeachings(Array.isArray(tg) ? tg : []);
       setLoaded(true);
     });
   }, []);
 
+  // The pool functions read a module-level mirror rather than a prop, so the
+  // mirror has to be refreshed in the same breath as the state that owns it.
+  const updateTeachings = useCallback((updater) =&gt; {
+    setTeachings((prev) =&gt; {
+      const next = typeof updater === &quot;function&quot; ? updater(prev) : updater;
+      setImportedTeachings(next);
+      saveTeachings(next);
+      return next;
+    });
+  }, []);
   const updateExercises = useCallback((updater) =&gt; {
     setExercises((prev) =&gt; {
       const next = typeof updater === &quot;function&quot; ? updater(prev) : updater;
@@ -3136,13 +3575,15 @@ function App() {
             onStartLog={() =&gt; setPracticeLogging(true)}
             onUpdateEntry={handlePracticeUpdate}
             onDeleteEntry={handlePracticeDelete}
+            teachings={teachings}
+            setTeachings={updateTeachings}
           /&gt;
         ) : tab === &quot;kitchen&quot; ? (
           &lt;KitchenTab recipes={recipes} setRecipes={updateRecipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} sessions={sessions} rules={kitchenRules} setRules={updateKitchenRules} /&gt;
         ) : tab === &quot;history&quot; ? (
           &lt;HistoryTab sessions={sessions} exercises={exercises} allStretches={stretches} recipes={recipes} mealPlan={mealPlan} /&gt;
         ) : (
-          &lt;PlanTab plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} /&gt;
+          &lt;PlanTab plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} sila={sila} kitchenRules={kitchenRules} teachings={teachings} /&gt;
         )}
 
         {toast &amp;&amp; (
@@ -3170,6 +3611,10 @@ function SilaJournalPrompt() {
   const n = preceptOfDay(today);
   const precept = PRECEPTS.find((x) =&gt; x.n === n);
   if (!precept) return null;
+  // Under the direct-teaching rule this closing line is a teacher&#x27;s own words
+  // whenever the library holds one for the precept in view. The written
+  // question is the floor, not the default.
+  const passage = preceptPassage(today, n);
   return (
     &lt;div style={{ border: &quot;2px solid #1B1B1B&quot;, background: &quot;#F9F6EE&quot;, padding: &quot;10px 12px&quot;, marginBottom: 12 }}&gt;
       &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 6 }}&gt;
@@ -3179,8 +3624,11 @@ function SilaJournalPrompt() {
         {precept.text}
       &lt;/div&gt;
       &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#6E6759&quot;, lineHeight: 1.6, marginTop: 6 }}&gt;
-        Where was this easy today, and where did it ask something of you?
+        {passage ? passage.text : &quot;Where was this easy today, and where did it ask something of you?&quot;}
       &lt;/div&gt;
+      {passage &amp;&amp; passage.source &amp;&amp; (
+        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, color: &quot;#6E6759&quot;, marginTop: 5 }}&gt;{passage.source}&lt;/div&gt;
+      )}
     &lt;/div&gt;
   );
 }
@@ -5228,7 +5676,7 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
   );
 }
 
-function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice }) {
+function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, sila = {}, kitchenRules = [], teachings = [] }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [newEx, setNewEx] = useState({ label: &quot;&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 5, noWeight: false, toChamber: false, sessionType: &quot;both&quot; });
@@ -5239,7 +5687,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
   const fileInputRef = React.useRef(null);
 
   const exportData = () =&gt; {
-    const payload = { sessions, plan, exercises, stretches, recipes, mealPlan, practice, exportedAt: new Date().toISOString() };
+    const payload = { sessions, plan, exercises, stretches, recipes, mealPlan, practice, sila, kitchenRules, teachings, exportedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: &quot;application/json&quot; });
     const url = URL.createObjectURL(blob);
     const a = document.createElement(&quot;a&quot;);
@@ -5263,6 +5711,9 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
         if (data.recipes) lsSet(&quot;recipes-config&quot;, JSON.stringify(data.recipes));
         if (data.mealPlan) lsSet(&quot;meal-plan&quot;, JSON.stringify(data.mealPlan));
         if (data.practice) lsSet(&quot;practice-entries&quot;, JSON.stringify(data.practice));
+        if (data.sila) lsSet(&quot;sila&quot;, JSON.stringify(data.sila));
+        if (data.kitchenRules) lsSet(&quot;kitchen-rules&quot;, JSON.stringify(data.kitchenRules));
+        if (data.teachings) lsSet(TEACHINGS_KEY, JSON.stringify(data.teachings));
         setImportStatus(&quot;Imported — reloading…&quot;);
         setTimeout(() =&gt; window.location.reload(), 800);
       } catch (err) {
@@ -5326,7 +5777,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
           &lt;textarea
             readOnly
             onClick={(e) =&gt; e.target.select()}
-            value={JSON.stringify({ sessions, plan, exercises, stretches, recipes, mealPlan, practice, exportedAt: new Date().toISOString() })}
+            value={JSON.stringify({ sessions, plan, exercises, stretches, recipes, mealPlan, practice, sila, kitchenRules, teachings, exportedAt: new Date().toISOString() })}
             style={{
               width: &quot;100%&quot;, minHeight: 150, border: &quot;2px solid #1B1B1B&quot;, padding: 10, marginTop: 8,
               fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, lineHeight: 1.5,

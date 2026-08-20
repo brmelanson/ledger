@@ -17634,6 +17634,7 @@ const STORAGE_LABELS = {
     "sila": "that sila marker",
     "kitchen-rules": "that kitchen rule",
     "log-draft": "the in-progress workout draft",
+    "teachings": "that teaching",
 };
 // A refused write is silent by default. setItem throws when the quota is full,
 // but it can also accept the call and store nothing, which is how a change can
@@ -17878,9 +17879,21 @@ async function loadState() {
         const sila = sl ? JSON.parse(sl.value) : {};
         const kr = lsGet("kitchen-rules");
         const kitchenRules = kr ? mergeRules(JSON.parse(kr.value)) : SEED_RULES;
+        // Parsed on its own rather than inside the shared try: a malformed
+        // teachings blob should cost the teachings, not send every other
+        // section back to its seed data for the rest of the session.
+        let teachings = [];
+        try {
+            const tg = lsGet(TEACHINGS_KEY);
+            const parsed = tg ? JSON.parse(tg.value) : [];
+            if (Array.isArray(parsed))
+                teachings = parsed;
+        }
+        catch (e) { }
         return {
             sila,
             kitchenRules,
+            teachings,
             sessions: s ? JSON.parse(s.value) : SEED_SESSIONS,
             plan: p ? mergePlan(JSON.parse(p.value)) : null,
             practice,
@@ -17891,7 +17904,7 @@ async function loadState() {
         };
     }
     catch (e) {
-        return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN, sila: {}, kitchenRules: SEED_RULES };
+        return { sessions: SEED_SESSIONS, plan: null, practice: SEED_PRACTICE, exercises: SEED_EXERCISES, stretches: STRETCHES, recipes: DEFAULT_RECIPES, mealPlan: SEED_MEAL_PLAN, sila: {}, kitchenRules: SEED_RULES, teachings: [] };
     }
 }
 async function saveSessions(sessions) { lsSet("sessions", JSON.stringify(sessions)); }
@@ -17903,6 +17916,7 @@ async function saveRecipes(recipes) { lsSet("recipes-config", JSON.stringify(rec
 async function saveMealPlan(mealPlan) { lsSet("meal-plan", JSON.stringify(mealPlan)); }
 async function saveSila(sila) { lsSet("sila", JSON.stringify(sila)); }
 async function saveKitchenRules(rules) { lsSet("kitchen-rules", JSON.stringify(rules)); }
+async function saveTeachings(teachings) { lsSet(TEACHINGS_KEY, JSON.stringify(teachings)); }
 function getApiKey() {
     try {
         return localStorage.getItem("ledger:api-key") || "";
@@ -19407,11 +19421,13 @@ const PRACTICE_POINTERS = [
     { theme: "Metta", text: "Notice whether the goodwill narrows when you turn it toward yourself.", source: null, types: ["metta"] },
 ];
 function pointerPool(type) {
-    const general = PRACTICE_POINTERS.filter((p) => !p.types);
+    // Imported passages lead each pool; the built-in prompts sit underneath
+    // until enough have been imported for that slot to stand on its own.
+    const general = blendedPool(importedGeneral(), PRACTICE_POINTERS.filter((p) => !p.types), LIBRARY_FULL.general);
     if (!type)
         return general;
-    const matched = PRACTICE_POINTERS.filter((p) => p.types && p.types.indexOf(type) !== -1);
-    // Type-specific pointers are few, so blend them with the general pool rather
+    const matched = blendedPool(importedForType(type), PRACTICE_POINTERS.filter((p) => p.types && p.types.indexOf(type) !== -1), LIBRARY_FULL.type);
+    // Type-specific pointers are few, so fall back to the general pool rather
     // than showing the same handful every time he picks that practice.
     return matched.length ? matched : general;
 }
@@ -19628,14 +19644,21 @@ function dailyPointerFor(dateStr, type, offset) {
         // this pool, and the year term keeps next September from repeating this one.
         const d = period.dayIndex + off;
         const ordinal = Math.floor(d / 3) * 2 + (d % 3) + period.year * 11;
-        const p = pointerFromPool(SILA_POINTERS, ordinal);
+        const p = pointerFromPool(silaPool(), ordinal);
         if (p)
             return p;
     }
-    // The interwoven third still indexes by date, which is fine only because the
-    // general pool's length isn't a multiple of 3. If it ever becomes one, this
-    // line starts showing a third of the library and hiding the rest — give it
-    // the same ordinal treatment as above.
+    if (period) {
+        // The interwoven third used to index by date, which only held while the
+        // general pool's length happened not to be a multiple of 3. The pool
+        // grows with every import now, so that assumption can't be relied on:
+        // this day gets the same ordinal treatment, counting the days that
+        // actually draw from this pool rather than the calendar.
+        const d = period.dayIndex + off;
+        const p = pointerFromPool(pointerPool(type), Math.floor(d / 3) + period.year * 5);
+        if (p)
+            return p;
+    }
     return pointerForDate(dateStr, pointerPool(type), off);
 }
 // The precept the band highlights. When today's pointer is a sila one it names
@@ -19649,6 +19672,334 @@ function preceptOfDay(dateStr) {
     if (p && p.precept)
         return p.precept;
     return (period.dayIndex % PRECEPTS.length) + 1;
+}
+// ---------- imported teachings ----------
+// The built-in pointer library is written in this app's own voice — useful, but
+// not the teaching itself. A teaching imported from a URL is stored whole, in
+// reading order, in the teacher's own words, and the daily pointer draws its
+// lines from that. The built-in pool stays underneath as a floor so the Practice
+// tab is never blank, and retires slot by slot as the imported library fills.
+const TEACHINGS_KEY = "teachings";
+// A dharma talk transcript runs 3–6k words. The cap is generous enough for a
+// long sutta and low enough that one bad import can't eat the storage quota
+// every other feature shares.
+const TEACHING_CHAR_CAP = 80000;
+// Counts at which the built-in pointers stop being mixed in. Held per slot,
+// because the type-matched journal prompts fill far more slowly than the
+// general daily pointer does.
+const LIBRARY_FULL = { general: 20, type: 8, sila: 15 };
+// Pool functions are called from components scattered across the tree — the
+// daily pointer, the journal prompt inside the wizard, the sila prompt — and
+// threading a teachings prop through all of them would mean touching every
+// component in between. The list is mirrored here instead and refreshed
+// whenever the state that owns it changes, so a re-render always reads current
+// data. App state remains the single source of truth; this is a read cache.
+let IMPORTED_TEACHINGS = [];
+function setImportedTeachings(list) {
+    IMPORTED_TEACHINGS = Array.isArray(list) ? list : [];
+}
+// Flatten every teaching's pointer-worthy segments into one list, each carrying
+// its own attribution so a line can always be traced back to who said it.
+function teachingPassages() {
+    const out = [];
+    for (const t of IMPORTED_TEACHINGS) {
+        const segs = (t && t.segments) || [];
+        for (let i = 0; i < segs.length; i++) {
+            const s = segs[i];
+            if (!s || !s.pointer || !s.text)
+                continue;
+            out.push({
+                theme: s.theme || "Teaching",
+                text: s.text,
+                source: [t.author, t.work || t.title].filter(Boolean).join(" \u2014 "),
+                url: t.url || null,
+                types: s.types,
+                precept: s.precept,
+            });
+        }
+    }
+    return out;
+}
+function importedGeneral() {
+    return teachingPassages().filter((p) => !p.types && p.precept === undefined);
+}
+function importedForType(type) {
+    return teachingPassages().filter((p) => p.types && p.types.indexOf(type) !== -1);
+}
+function importedSila() {
+    return teachingPassages().filter((p) => p.precept !== undefined);
+}
+// Below the threshold the two pools are shown together, so an imported line
+// starts appearing the day it arrives instead of waiting for a quota. At or
+// above it the built-ins drop out of that slot entirely.
+function blendedPool(imported, builtin, threshold) {
+    return imported.length >= threshold ? imported : imported.concat(builtin);
+}
+function silaPool() {
+    return blendedPool(importedSila(), SILA_POINTERS, LIBRARY_FULL.sila);
+}
+// How full each slot is, for the readout on the Practice tab.
+function libraryStatus() {
+    return {
+        sources: IMPORTED_TEACHINGS.length,
+        passages: teachingPassages().length,
+        generalFull: importedGeneral().length >= LIBRARY_FULL.general,
+        silaFull: importedSila().length >= LIBRARY_FULL.sila,
+    };
+}
+// ---------- importing ----------
+const TEACHING_SYSTEM = `You are importing a Buddhist teaching into a practitioner's personal practice journal. You are an extractor, not an author.
+
+Absolute rules:
+- Every word you place in "segments" must be the teacher's own words, copied verbatim from the page. Do not paraphrase, summarise, modernise, condense or compose. If you cannot copy it, leave it out.
+- Add no commentary, framing or pointers of your own. Not one sentence.
+- Skip navigation, headers, footers, donation appeals, comment threads, copyright notices and audio player text.
+
+Return ONLY a JSON object. No preamble, no markdown fences:
+{
+  "title": "the title as the page gives it",
+  "author": "the teacher, or the translator, as the page names them",
+  "work": "sutta reference or collection if the page gives one, otherwise null",
+  "segments": [
+    { "text": "verbatim text", "pointer": true, "theme": "Attitude", "types": ["breath"], "precept": 4 }
+  ]
+}
+
+The segments must cover the whole teaching in reading order, so that joining them back together reproduces it. Break at paragraph boundaries. Keep each segment under roughly 90 words, splitting a long paragraph at sentence boundaries.
+
+For each segment:
+- "pointer": true only when the segment stands on its own as something worth holding in mind during a sit. Narrative setup, retreat logistics, asides and sentences that need the previous one to make sense are false. Expect roughly a quarter to a third to be true.
+- "theme": two or three words naming what it concerns — Attitude, Effort, Hindrances, Metta, Impermanence and so on. Only on segments where pointer is true.
+- "types": only when the segment speaks to one specific practice. Allowed: "breath", "bodyScan", "metta", "open". Omit otherwise.
+- "precept": only when the segment concerns ethical conduct. 1 harming, 2 taking what is not given, 3 sexual misconduct, 4 false speech, 5 intoxicants, 0 for virtue in general. Omit otherwise.
+
+If the page is not a Buddhist teaching, return {"error":"not a teaching"}.`;
+async function fetchTeaching(url) {
+    const key = getApiKey();
+    if (!key)
+        throw new Error("no-key");
+    const call = (messages) => fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            // The whole talk comes back segmented, so the reply is about as long as
+            // the talk itself. A 4,000-word transcript lands near 12k tokens.
+            max_tokens: 16000,
+            system: TEACHING_SYSTEM,
+            tools: [{
+                    type: "web_fetch_20250910",
+                    name: "web_fetch",
+                    max_uses: 3,
+                    max_content_tokens: 40000,
+                }],
+            messages,
+        }),
+    });
+    let messages = [{ role: "user", content: "Import the teaching at " + url }];
+    let blocks = [];
+    let stop = null;
+    // Same pause_turn handling as the recipe import: a server-side fetch can
+    // return early expecting the conversation handed straight back.
+    for (let turn = 0; turn < 3; turn++) {
+        const response = await call(messages);
+        if (!response.ok)
+            throw new Error(`API error ${response.status}`);
+        const data = await response.json();
+        blocks = blocks.concat(data.content || []);
+        stop = data.stop_reason;
+        if (stop === "pause_turn") {
+            messages = messages.concat([{ role: "assistant", content: data.content }]);
+            continue;
+        }
+        break;
+    }
+    const fetchError = blocks
+        .filter((c) => c.type === "web_fetch_tool_result")
+        .map((c) => c.content && c.content.error_code)
+        .find(Boolean);
+    if (fetchError)
+        throw new Error("fetch:" + fetchError);
+    const text = blocks.filter((c) => c.type === "text").map((c) => c.text).join("");
+    const cleaned = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const first = cleaned.indexOf("{");
+    const last = cleaned.lastIndexOf("}");
+    if (first < 0 || last < 0)
+        throw new Error(stop === "max_tokens" ? "truncated" : "unreadable");
+    let parsed;
+    try {
+        parsed = JSON.parse(cleaned.slice(first, last + 1));
+    }
+    catch (e) {
+        throw new Error(stop === "max_tokens" ? "truncated" : "unreadable");
+    }
+    if (parsed && parsed.error)
+        throw new Error("not-a-teaching");
+    const segsIn = Array.isArray(parsed.segments) ? parsed.segments : [];
+    // Trust nothing about the shape coming back. A stray precept of 9 or a types
+    // value the app has never heard of would sit in storage forever and quietly
+    // route a passage into a pool that never surfaces it.
+    const TYPES = ["breath", "bodyScan", "metta", "open"];
+    const segments = [];
+    let chars = 0;
+    for (const s of segsIn) {
+        const t = typeof (s === null || s === void 0 ? void 0 : s.text) === "string" ? s.text.trim() : "";
+        if (!t)
+            continue;
+        chars += t.length;
+        if (chars > TEACHING_CHAR_CAP)
+            break;
+        const seg = { text: t, pointer: s.pointer === true };
+        if (seg.pointer && typeof s.theme === "string" && s.theme.trim())
+            seg.theme = s.theme.trim();
+        const types = Array.isArray(s.types) ? s.types.filter((x) => TYPES.indexOf(x) !== -1) : [];
+        if (types.length)
+            seg.types = types;
+        if (typeof s.precept === "number" && s.precept >= 0 && s.precept <= 5)
+            seg.precept = s.precept;
+        segments.push(seg);
+    }
+    if (!segments.length)
+        throw new Error("empty");
+    return {
+        id: Date.now(),
+        url,
+        title: (typeof parsed.title === "string" && parsed.title.trim()) || url,
+        author: (typeof parsed.author === "string" && parsed.author.trim()) || "Unattributed",
+        work: (typeof parsed.work === "string" && parsed.work.trim()) || null,
+        addedAt: localDateStr(),
+        truncated: chars > TEACHING_CHAR_CAP,
+        segments,
+    };
+}
+const TEACHING_ERRORS = {
+    "no-key": "No API key saved yet \u2014 add one under Plan \u00B7 Settings first.",
+    "not-a-teaching": "That page didn't read as a teaching. Check the link points at the talk itself.",
+    truncated: "That talk came back longer than there was room for. Try a single talk rather than a whole collection page.",
+    unreadable: "The reply came back garbled. Worth trying once more.",
+    empty: "Nothing readable came off that page.",
+};
+// ---------- the teachings card on the Practice tab ----------
+function TeachingsCard({ teachings, setTeachings }) {
+    const [url, setUrl] = (0, react_1.useState)("");
+    const [busy, setBusy] = (0, react_1.useState)(false);
+    const [err, setErr] = (0, react_1.useState)("");
+    const [note, setNote] = (0, react_1.useState)("");
+    const [openId, setOpenId] = (0, react_1.useState)(null);
+    const [confirmId, setConfirmId] = (0, react_1.useState)(null);
+    const status = libraryStatus();
+    const runImport = async () => {
+        const u = url.trim();
+        if (!u)
+            return;
+        if (!/^https?:\/\//i.test(u)) {
+            setErr("That needs to start with http:// or https://");
+            return;
+        }
+        if (teachings.some((t) => t.url === u)) {
+            setErr("That link is already in the library.");
+            return;
+        }
+        setBusy(true);
+        setErr("");
+        setNote("");
+        try {
+            const t = await fetchTeaching(u);
+            setTeachings((prev) => [t, ...prev]);
+            setUrl("");
+            const kept = t.segments.filter((s) => s.pointer).length;
+            setNote(`Added "${t.title}" \u2014 ${t.segments.length} passages, ${kept} in the rotation.`);
+        }
+        catch (e) {
+            const m = String(e && e.message ? e.message : e);
+            setErr(m.slice(0, 6) === "fetch:"
+                ? (FETCH_ERRORS[m.slice(6)] || "That page couldn't be read.")
+                : (TEACHING_ERRORS[m] || "That import didn't go through. Worth trying once more."));
+        }
+        finally {
+            setBusy(false);
+        }
+    };
+    const remove = (id) => {
+        setTeachings((prev) => prev.filter((t) => t.id !== id));
+        setConfirmId(null);
+        if (openId === id)
+            setOpenId(null);
+    };
+    const mono = { fontFamily: "'IBM Plex Mono', monospace" };
+    // Collapsed by default. This is a library, not a daily reading — the tab it
+    // sits on is for logging a sit, and a growing list of talks would push that
+    // below the fold within a fortnight.
+    const [open, setOpen] = (0, react_1.useState)(false);
+    return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0 } },
+        react_1.default.createElement("div", { onClick: () => setOpen((o) => !o), style: { padding: "16px 18px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 } },
+            react_1.default.createElement("div", null,
+                react_1.default.createElement("div", { style: Object.assign(Object.assign({}, mono), { fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759" }) }, "Teachings"),
+                react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 24, fontWeight: 800, letterSpacing: -0.8, textTransform: "uppercase", color: "#1B1B1B", marginTop: 2 } },
+                    status.passages,
+                    " passage",
+                    status.passages === 1 ? "" : "s"),
+                react_1.default.createElement("div", { style: Object.assign(Object.assign({}, mono), { fontSize: 10.5, color: "#6E6759", marginTop: 3 }) },
+                    status.sources,
+                    " SOURCE",
+                    status.sources === 1 ? "" : "S",
+                    " \u00B7 ",
+                    status.generalFull ? "LIBRARY CARRYING" : "BUILT-INS FILLING IN")),
+            react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 26, fontWeight: 800, color: "#1B1B1B", lineHeight: 1 } }, open ? "\u2013" : "+")),
+        open && (react_1.default.createElement("div", { style: { padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 16 } },
+            react_1.default.createElement("div", null,
+                react_1.default.createElement("input", { value: url, onChange: (e) => setUrl(e.target.value), placeholder: "https://suttacentral.net/...", style: { width: "100%", boxSizing: "border-box", borderRadius: 0, border: "2px solid #1B1B1B", padding: "10px 12px", fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, background: "#F9F6EE", color: "#1B1B1B" } }),
+                react_1.default.createElement("button", { onClick: runImport, disabled: busy, style: Object.assign(Object.assign({}, btnPrimary), { marginTop: 10, width: "100%", justifyContent: "center", opacity: busy ? 0.55 : 1 }) }, busy ? "Reading the page\u2026" : "Import teaching"),
+                err && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#BE3B2A", marginTop: 10, lineHeight: 1.5 } }, err)),
+                note && !err && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#2F6B4F", marginTop: 10, lineHeight: 1.5 } }, note))),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", lineHeight: 1.6, borderTop: "2px solid #D8D0BF", paddingTop: 12 } }, status.generalFull
+                ? "The library carries the daily pointer on its own now \u2014 the built-in prompts have stepped back."
+                : `Built-in prompts are still filling the gaps. ${Math.max(0, LIBRARY_FULL.general - importedGeneral().length)} more imported passages and they retire.`),
+            teachings.length === 0 ? (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6 } }, "Nothing imported yet. suttacentral.net, dhammatalks.org, accesstoinsight.org, forestsangha.org and bswa.org all read cleanly.")) : (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, teachings.map((t) => {
+                const open = openId === t.id;
+                const kept = t.segments.filter((s) => s.pointer).length;
+                return (react_1.default.createElement("div", { key: t.id, style: { border: "2px solid #1B1B1B", background: "#F9F6EE", padding: "12px 14px" } },
+                    react_1.default.createElement("div", { onClick: () => setOpenId(open ? null : t.id), style: { cursor: "pointer" } },
+                        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 14, fontWeight: 600, color: "#1B1B1B", lineHeight: 1.4 } }, t.title),
+                        react_1.default.createElement("div", { style: Object.assign(Object.assign({}, mono), { fontSize: 11, color: "#6E6759", marginTop: 4 }) },
+                            t.author,
+                            t.work ? " \u00B7 " + t.work : ""),
+                        react_1.default.createElement("div", { style: Object.assign(Object.assign({}, mono), { fontSize: 10.5, color: "#6E6759", marginTop: 3 }) },
+                            t.segments.length,
+                            " PASSAGES \u00B7 ",
+                            kept,
+                            " IN ROTATION \u00B7 ADDED ",
+                            t.addedAt)),
+                    open && (react_1.default.createElement("div", { style: { marginTop: 12, borderTop: "2px solid #D8D0BF", paddingTop: 12 } },
+                        react_1.default.createElement("div", { style: { maxHeight: 340, overflowY: "auto", paddingRight: 4 } }, t.segments.map((s, i) => (react_1.default.createElement("div", { key: i, style: {
+                                fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.65,
+                                color: s.pointer ? "#1B1B1B" : "#6E6759",
+                                borderLeft: s.pointer ? "3px solid #C0632A" : "3px solid transparent",
+                                paddingLeft: 10, marginBottom: 10,
+                            } }, s.text)))),
+                        t.truncated && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#BE3B2A", marginTop: 6 } }, "This one was long enough to be cut short. The stored part is above.")),
+                        react_1.default.createElement("div", { style: { display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" } },
+                            t.url && (react_1.default.createElement("a", { href: t.url, target: "_blank", rel: "noreferrer", style: Object.assign(Object.assign({}, btnGhost), { textDecoration: "none", fontSize: 13, padding: "8px 14px" }) }, "Open source")),
+                            confirmId === t.id ? (react_1.default.createElement(react_1.default.Fragment, null,
+                                react_1.default.createElement("button", { onClick: () => remove(t.id), style: Object.assign(Object.assign({}, btnGhost), { fontSize: 13, padding: "8px 14px", borderColor: "#BE3B2A", color: "#BE3B2A" }) }, "Remove for good"),
+                                react_1.default.createElement("button", { onClick: () => setConfirmId(null), style: Object.assign(Object.assign({}, btnGhost), { fontSize: 13, padding: "8px 14px" }) }, "Keep"))) : (react_1.default.createElement("button", { onClick: () => setConfirmId(t.id), style: Object.assign(Object.assign({}, btnGhost), { fontSize: 13, padding: "8px 14px", color: "#6E6759", borderColor: "#D8D0BF" }) }, "Remove")))))));
+            })))))));
+}
+// The sila journal prompt used to close with a question written in this app's
+// voice. When the library holds something a teacher actually said about the
+// precept in view, that goes there instead, and the written question drops back
+// to being the floor.
+function preceptPassage(dateStr, n) {
+    const pool = importedSila().filter((p) => p.precept === n || p.precept === 0);
+    if (!pool.length)
+        return null;
+    const days = Math.floor(Date.parse(dateStr + "T00:00:00") / 86400000);
+    return pointerFromPool(pool, Number.isFinite(days) ? days : 0);
 }
 function DailyPointer() {
     const [offset, setOffset] = (0, react_1.useState)(0);
@@ -19664,7 +20015,9 @@ function DailyPointer() {
                     fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 0.8, textTransform: "uppercase",
                 } }, "Another")),
         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 15, lineHeight: 1.65, color: "#1B1B1B", marginTop: 10 } }, p.text),
-        p.source && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759", marginTop: 10 } }, p.source))));
+        (p.source || p.url) && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759", marginTop: 10 } },
+            p.source,
+            p.url && react_1.default.createElement("a", { href: p.url, target: "_blank", rel: "noreferrer", style: { color: "#6E6759", marginLeft: p.source ? 8 : 0 } }, "Source")))));
 }
 function PointerPrompt({ type }) {
     const p = pointerForDate(localDateStr(), pointerPool(type), 0);
@@ -19674,7 +20027,7 @@ function PointerPrompt({ type }) {
         react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 6 } }, "Worth considering"),
         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, p.text)));
 }
-function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
+function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry, teachings = [], setTeachings }) {
     const [editingId, setEditingId] = (0, react_1.useState)(null);
     const [confirmId, setConfirmId] = (0, react_1.useState)(null);
     // Streak deliberately removed: counting consecutive days measures whether you sat,
@@ -19697,6 +20050,7 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry }) {
                 "Log meditation & journal ",
                 react_1.default.createElement(ChevronRight, { size: 16 }))),
         react_1.default.createElement(DailyPointer, null),
+        react_1.default.createElement(TeachingsCard, { teachings: teachings, setTeachings: setTeachings }),
         practice.length === 0 ? (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#6E6759", textAlign: "center", padding: "20px 0" } }, "No entries yet \u2014 your first sit will start the log.")) : (ordered.map((p) => (react_1.default.createElement("div", { key: p.id, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "14px 18px" } },
             react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
                 react_1.default.createElement("button", { onClick: () => { setEditingId(editingId === p.id ? null : p.id); setConfirmId(null); }, title: "Tap to change the date", style: {
@@ -19756,6 +20110,7 @@ function App() {
     const [kitchenRules, setKitchenRules] = (0, react_1.useState)(SEED_RULES);
     const [saveWarning, setSaveWarning] = (0, react_1.useState)(null);
     const [showSettings, setShowSettings] = (0, react_1.useState)(false);
+    const [teachings, setTeachings] = (0, react_1.useState)([]);
     const [apiKeyInput, setApiKeyInput] = (0, react_1.useState)("");
     const [hasKey, setHasKey] = (0, react_1.useState)(false);
     (0, react_1.useEffect)(() => {
@@ -19764,7 +20119,7 @@ function App() {
         setDraft(loadDraft());
     }, []);
     (0, react_1.useEffect)(() => {
-        loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp, sila: sl, kitchenRules: kr }) => {
+        loadState().then(({ sessions: s, plan: p, practice: pr, exercises: ex, stretches: st, recipes: rc, mealPlan: mp, sila: sl, kitchenRules: kr, teachings: tg }) => {
             setSessions(s);
             if (p)
                 setPlan(p);
@@ -19775,7 +20130,19 @@ function App() {
             setMealPlan(mp || []);
             setSila(sl || {});
             setKitchenRules(Array.isArray(kr) ? kr : SEED_RULES);
+            setTeachings(Array.isArray(tg) ? tg : []);
+            setImportedTeachings(Array.isArray(tg) ? tg : []);
             setLoaded(true);
+        });
+    }, []);
+    // The pool functions read a module-level mirror rather than a prop, so the
+    // mirror has to be refreshed in the same breath as the state that owns it.
+    const updateTeachings = (0, react_1.useCallback)((updater) => {
+        setTeachings((prev) => {
+            const next = typeof updater === "function" ? updater(prev) : updater;
+            setImportedTeachings(next);
+            saveTeachings(next);
+            return next;
         });
     }, []);
     const updateExercises = (0, react_1.useCallback)((updater) => {
@@ -19926,7 +20293,7 @@ function App() {
                 react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
                     react_1.default.createElement("button", { onClick: () => setLogging(true), style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Resume"),
                     react_1.default.createElement("button", { onClick: () => { clearDraft(); setDraft(null); }, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Discard")))),
-            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice })),
+            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete, teachings: teachings, setTeachings: updateTeachings })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice, sila: sila, kitchenRules: kitchenRules, teachings: teachings })),
             toast && (react_1.default.createElement("div", { style: {
                     position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
                     background: "#1B1B1B", color: "#F9F6EE", padding: "10px 20px", borderRadius: 0,
@@ -19949,6 +20316,10 @@ function SilaJournalPrompt() {
     const precept = PRECEPTS.find((x) => x.n === n);
     if (!precept)
         return null;
+    // Under the direct-teaching rule this closing line is a teacher's own words
+    // whenever the library holds one for the precept in view. The written
+    // question is the floor, not the default.
+    const passage = preceptPassage(today, n);
     return (react_1.default.createElement("div", { style: { border: "2px solid #1B1B1B", background: "#F9F6EE", padding: "10px 12px", marginBottom: 12 } },
         react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 6 } },
             "Sila period \u00B7 Day ",
@@ -19956,7 +20327,8 @@ function SilaJournalPrompt() {
             " of ",
             period.totalDays),
         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: "#1B1B1B", lineHeight: 1.5 } }, precept.text),
-        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6, marginTop: 6 } }, "Where was this easy today, and where did it ask something of you?")));
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6, marginTop: 6 } }, passage ? passage.text : "Where was this easy today, and where did it ask something of you?"),
+        passage && passage.source && react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#6E6759", marginTop: 5 } }, passage.source)));
 }
 // The band on Today. It names the period, holds the five precepts in view with
 // the day's one picked out, and carries the two markers.
@@ -21350,7 +21722,7 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
         })(),
         s.notes && react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 8, fontStyle: "italic" } }, s.notes))))));
 }
-function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice }) {
+function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, sila = {}, kitchenRules = [], teachings = [] }) {
     const [showAdd, setShowAdd] = (0, react_1.useState)(false);
     const [showRaw, setShowRaw] = (0, react_1.useState)(false);
     const [newEx, setNewEx] = (0, react_1.useState)({ label: "", unit: "lb", targetSets: 3, targetReps: 12, step: 5, noWeight: false, toChamber: false, sessionType: "both" });
@@ -21360,7 +21732,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
     const [importStatus, setImportStatus] = (0, react_1.useState)("");
     const fileInputRef = react_1.default.useRef(null);
     const exportData = () => {
-        const payload = { sessions, plan, exercises, stretches, recipes, mealPlan, practice, exportedAt: new Date().toISOString() };
+        const payload = { sessions, plan, exercises, stretches, recipes, mealPlan, practice, sila, kitchenRules, teachings, exportedAt: new Date().toISOString() };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -21390,6 +21762,12 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
                     lsSet("meal-plan", JSON.stringify(data.mealPlan));
                 if (data.practice)
                     lsSet("practice-entries", JSON.stringify(data.practice));
+                if (data.sila)
+                    lsSet("sila", JSON.stringify(data.sila));
+                if (data.kitchenRules)
+                    lsSet("kitchen-rules", JSON.stringify(data.kitchenRules));
+                if (data.teachings)
+                    lsSet(TEACHINGS_KEY, JSON.stringify(data.teachings));
                 setImportStatus("Imported — reloading…");
                 setTimeout(() => window.location.reload(), 800);
             }
@@ -21445,7 +21823,7 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
                 react_1.default.createElement("button", { onClick: exportData, style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Export data"),
                 react_1.default.createElement("button", { onClick: () => fileInputRef.current && fileInputRef.current.click(), style: { ...btnGhost, flex: 1, justifyContent: "center" } }, "Import data")),
             react_1.default.createElement("button", { onClick: () => setShowRaw((v) => !v), style: { ...btnGhost, width: "100%", justifyContent: "center", marginTop: 8 } }, showRaw ? "Hide text" : "Show as text"),
-            showRaw && (react_1.default.createElement("textarea", { readOnly: true, onClick: (e) => e.target.select(), value: JSON.stringify({ sessions, plan, exercises, stretches, recipes, mealPlan, practice, exportedAt: new Date().toISOString() }), style: {
+            showRaw && (react_1.default.createElement("textarea", { readOnly: true, onClick: (e) => e.target.select(), value: JSON.stringify({ sessions, plan, exercises, stretches, recipes, mealPlan, practice, sila, kitchenRules, teachings, exportedAt: new Date().toISOString() }), style: {
                     width: "100%", minHeight: 150, border: "2px solid #1B1B1B", padding: 10, marginTop: 8,
                     fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, lineHeight: 1.5,
                     background: "#E7E0D0", color: "#1B1B1B", resize: "vertical",
