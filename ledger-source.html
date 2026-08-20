@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the chef's hard-won constraints moved out of the hard-coded CHEF_BASE string into a kitchen-rules storage key, seeded from the eight constraints previously compiled in, editable and prunable from the Kitchen tab; new rules are entered by freewriting and distilled into an imperative rule via RULE_DISTILL_SYSTEM, keeping the raw note verbatim when the API key or network is absent. Recipes gained a dated edits log and a source block (kind chef or cook, cook, site, url, upstream, adaptations, commentNotes), all preserved through mergeRecipes; edits fold into kitchenHistory as an ADJUSTMENTS MADE block. The chef panel gained an import mode that takes a single URL: askChefUrl calls the messages endpoint with the web_fetch_20250910 server tool (max_uses 3, max_content_tokens 30000), so the page is fetched server-side rather than by the browser, which CORS would block. The author, publication, upstream credit and corroborated comment-thread findings are read off the page and shown for correction before saving. Fetch failures return 200 with an error code in the body, mapped to plain English in FETCH_ERRORS, falling back to a paste box. Output ceilings are 8000 for import and 6000 for generation, raised after a truncated reply surfaced as a raw JSON.parse error; truncated and unreadable replies are distinguished and phrased via CHEF_ERRORS, and a pause_turn stop reason is resumed by handing the assistant turn back, up to three turns. A Cooks panel lists who the kitchen learns from, and ReportBack drafts a comment for the source site once a sourced recipe has been edited. Palette settled: the former blue accent is now the activity colour, ember #C0632A with tint #F7E7D9, held in the --activity and --activity-tint custom properties and applied at module load before first paint (ACTIVITY_COLOR / ACTIVITY_TINT, applyTheme). The four-way trial picker has been removed. Activity means the cook's own doing — weight sparkline, sit minutes, chef import frame, annotationStyle handwriting, protein badge. Outbound links are ink #1B1B1B underlined, not activity. Ember is the closest candidate to the rejection red #BE3B2A, so the two are separated by form as well as hue: activity as strokes, rules and small fills, rejection as bordered panels. Remaining palette: yellow #FFC400 alternate day state and session badge, red #BE3B2A rejection deletion and errors only, green #2F6B4F on #E5EDE4 coaching advisories only. Stretches are now ordered shortest hold first via byHoldLength / orderStretches inside stretchesForSession, so equal durations form one contiguous block that can be timed on a watch in a single run; rounds break ties and the sort is stable. Zero border radius except the launcher icon; no rotation except the verdict stamps.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the teachings importer rewrites suttacentral.net links to its JSON text API (bilarasuttas, falling back to extractsutta and then the published bilara-data on raw.githubusercontent) and rebuilds the text from translation_text in keys_order; a 1000-character floor (TEACHING_MIN_CHARS) now gates every import both in the system prompt and on the assembled segments, so app shells, audio-only pages and text-free PDFs are rejected as “too-short” rather than segmented into nonsense, and the error strings name the real failure. suggestCardioTarget was rebuilt around a six-run window (CARDIO_WINDOW): the distance anchors on the best run in the window rather than the most recent, the window is split in half to read pace and heart-rate direction, and sessions flagged timeConstrained are excluded from the maths while still being logged. A third session type “R” (run-only) skips movement prep and lifting, offers an optional BODYWEIGHT step stored outside entry.exercises so it can never read as a strength session, and is excluded from the A/B alternation and balance checks. Stretch sessions are capped at STRETCH_SESSION_CAP (5) drawn by selectSessionStretches from the full pool: STRETCH_ANCHORS (hip flexor, hamstring, calf) every session, the remaining slots scored on days since last stretched plus a bonus for matching the session emphasis; suggestStretchExpansion now measures completion against what each session offered rather than the whole pool. hipThrust moved to the loaded bench version via a loadFloor field (25lb) honoured in getExerciseRecommendation, reaching already-stored configs through a new migrateExercises step in the load path.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -53,6 +53,23 @@ const SEED_SESSIONS = [
   {&quot;id&quot;: 1785769761023.6174, &quot;date&quot;: &quot;2026-08-03&quot;, &quot;type&quot;: &quot;A&quot;, &quot;duration&quot;: 30, &quot;distance&quot;: 1.9, &quot;hrAvg&quot;: 139, &quot;hrMax&quot;: 171, &quot;modality&quot;: &quot;treadmill&quot;, &quot;warmup&quot;: &quot;done&quot;, &quot;exercises&quot;: {&quot;seatedRow&quot;: {&quot;weight&quot;: 70, &quot;sets&quot;: 3, &quot;reps&quot;: 12, &quot;feel&quot;: &quot;easy&quot;}, &quot;latPulldown&quot;: {&quot;weight&quot;: 55, &quot;sets&quot;: 3, &quot;reps&quot;: 12, &quot;feel&quot;: &quot;easy&quot;}, &quot;chestPress&quot;: {&quot;weight&quot;: 45, &quot;sets&quot;: 3, &quot;reps&quot;: 12, &quot;feel&quot;: &quot;hard&quot;}}, &quot;stretchRounds&quot;: {&quot;hipFlexor&quot;: 1, &quot;hamstring&quot;: 2, &quot;calf&quot;: 1, &quot;wallPec&quot;: 1, &quot;thoracic&quot;: 1, &quot;childsPose&quot;: 1}, &quot;sauna&quot;: &quot;done&quot;, &quot;meditation&quot;: null, &quot;notes&quot;: &quot;Good session! Chest presses were the hardest. The other machines felt easy, I&#x27;m surprised the coach portion didn&#x27;t recommend more reps, at least.&quot;},
 ];
 
+// Written once and shared by the seed config, the library entry and the
+// migration, so the three can&#x27;t drift apart the way the old floor-first
+// version did once the exercise had already been saved to storage.
+const HIP_THRUST_EXPLAINER = &quot;Set up on a bench: sit on the floor with your upper back against the long edge of a bench, knees bent, feet flat and about shoulder width. Roll a dumbbell over your hips and rest it in the crease, with a pad or folded towel underneath it. Drive through your heels until your body forms a straight line from knees to shoulders, squeeze the glutes hard for a second at the top, then lower under control.\n\nForm cues: the squeeze comes from the glutes, not from arching your low back — stop when your hips are level with knees and shoulders, not higher. Chin slightly tucked, ribs down. If you feel it in your low back rather than your glutes, your feet are probably too far away; walk them closer. If the bar of the dumbbell digs in, more padding rather than less weight.\n\nThe floor version is the same movement without the bench, and is worth one set as a warm-up. It is not worth programming on its own — unloaded, it sits below the load anything adapts to.&quot;;
+
+// Optional movements for a run-only day. Deliberately kept out of the exercise
+// config: these carry no weight, no progression and no session type, and if they
+// lived in entry.exercises the balance and plateau checks would read a doorstep
+// run as a strength session.
+const BODYWEIGHT = [
+  { key: &quot;pushups&quot;, label: &quot;Pushups&quot;, unit: &quot;reps&quot;, step: 5 },
+  { key: &quot;squats&quot;, label: &quot;Bodyweight Squats&quot;, unit: &quot;reps&quot;, step: 5 },
+  { key: &quot;lunges&quot;, label: &quot;Walking Lunges&quot;, unit: &quot;reps/side&quot;, step: 5 },
+  { key: &quot;jumpingJacks&quot;, label: &quot;Jumping Jacks&quot;, unit: &quot;reps&quot;, step: 10 },
+  { key: &quot;plank&quot;, label: &quot;Plank&quot;, unit: &quot;sec&quot;, step: 15 },
+];
+
 const DEFAULT_EXERCISES = {
   seatedRow: { label: &quot;Seated Row&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 5, sessionType: &quot;A&quot;, patterns: [&quot;horizontalPull&quot;], estMinutes: 6 },
   latPulldown: { label: &quot;Lat Pulldown&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 5, sessionType: &quot;A&quot;, patterns: [&quot;verticalPull&quot;], estMinutes: 6 },
@@ -76,7 +93,8 @@ const DEFAULT_EXERCISES = {
 const SEED_EXERCISES = {
   ...DEFAULT_EXERCISES,
   &quot;hipThrust&quot;: {
-    &quot;label&quot;: &quot;Glute Bridge / Hip Thrust&quot;,
+    &quot;label&quot;: &quot;Hip Thrust (bench)&quot;,
+    &quot;loadFloor&quot;: 25,
     &quot;unit&quot;: &quot;lb&quot;,
     &quot;targetSets&quot;: 3,
     &quot;targetReps&quot;: 12,
@@ -85,7 +103,7 @@ const SEED_EXERCISES = {
     &quot;patterns&quot;: [
       &quot;hipHinge&quot;
     ],
-    &quot;explainer&quot;: &quot;Start on the floor: lie on your back, knees bent, feet flat and close to your glutes. Push through your heels and lift your hips until your body forms a straight line from knees to shoulders. Squeeze your glutes hard at the top for a second, then lower slowly.\n\nOnce floor bridges are easy for 12 reps, move to the bench version: sit on the floor with your upper back against a bench, roll a dumbbell over your hips (use a pad or folded towel), and thrust up to the same straight-line position.\n\nForm cues: the squeeze comes from the glutes, not from arching your low back — stop when your hips are level with knees and shoulders, not higher. Keep your chin slightly tucked. If you feel it in your low back rather than your glutes, your feet are probably too far away; walk them closer.&quot;,
+    &quot;explainer&quot;: HIP_THRUST_EXPLAINER,
     &quot;estMinutes&quot;: 7,
     &quot;active&quot;: true,
     &quot;addedAt&quot;: &quot;2026-07-31&quot;
@@ -173,10 +191,10 @@ const PATTERNS = {
 // nothing here needs an API key.
 const EXERCISE_LIBRARY = [
   {
-    key: &quot;hipThrust&quot;, label: &quot;Glute Bridge / Hip Thrust&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 10,
-    sessionType: &quot;B&quot;, patterns: [&quot;hipHinge&quot;], priority: 1, prereq: &quot;legPress&quot;, estMinutes: 7,
-    why: &quot;The biggest hole in your program. Leg press trains the front of the leg; nothing trains the back — glutes and hamstrings. This is the version of that work that&#x27;s safest to learn on your own: your back is supported throughout, and if the weight is too heavy you simply can&#x27;t lift it, rather than being pulled into a bad position under load.&quot;,
-    explainer: &quot;Start on the floor: lie on your back, knees bent, feet flat and close to your glutes. Push through your heels and lift your hips until your body forms a straight line from knees to shoulders. Squeeze your glutes hard at the top for a second, then lower slowly.\n\nOnce floor bridges are easy for 12 reps, move to the bench version: sit on the floor with your upper back against a bench, roll a dumbbell over your hips (use a pad or folded towel), and thrust up to the same straight-line position.\n\nForm cues: the squeeze comes from the glutes, not from arching your low back — stop when your hips are level with knees and shoulders, not higher. Keep your chin slightly tucked. If you feel it in your low back rather than your glutes, your feet are probably too far away; walk them closer.&quot;,
+    key: &quot;hipThrust&quot;, label: &quot;Hip Thrust (bench)&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 10,
+    sessionType: &quot;B&quot;, patterns: [&quot;hipHinge&quot;], priority: 1, prereq: &quot;legPress&quot;, estMinutes: 7, loadFloor: 25,
+    why: &quot;The biggest hole in your program. Leg press trains the front of the leg; nothing trains the back — glutes and hamstrings. This is the version of that work that&#x27;s safest to learn on your own: your back is supported throughout, and if the weight is too heavy you simply can&#x27;t lift it, rather than being pulled into a bad position under load. Loaded from the start — unloaded on the floor it is a warm-up, not a working set.&quot;,
+    explainer: HIP_THRUST_EXPLAINER,
   },
   {
     key: &quot;overheadPress&quot;, label: &quot;Overhead Press&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 10, step: 5,
@@ -356,7 +374,11 @@ const localDateStr = (d = new Date()) =&gt; {
 // done. Infer A/B from which exercises are present so old data (and the
 // alternation logic that depends on it) still works.
 function effectiveType(s, exercises) {
-  if (s.type === &quot;A&quot; || s.type === &quot;B&quot;) return s.type;
+  // &quot;R&quot; is a run-only day: cardio, optional bodyweight work, no lifting. It is a
+  // real logged session, but it is deliberately never inferred from exercises and
+  // never stands in for A or B, so it can&#x27;t satisfy the alternation check or be
+  // read as a missed strength session.
+  if (s.type === &quot;A&quot; || s.type === &quot;B&quot; || s.type === &quot;R&quot;) return s.type;
   const keys = Object.keys(s.exercises || {});
   if (keys.length === 0) return s.type;
   const types = keys.map((k) =&gt; exercises[k]?.sessionType).filter(Boolean);
@@ -533,6 +555,20 @@ function mergeExercises(stored) {
   return merged;
 }
 
+// Stored config always wins over the defaults, which is right for weights and
+// rep targets and wrong for everything else: an exercise added from the library
+// months ago keeps whatever text and fields it had the day it was added, so a
+// corrected explainer or a new field never reaches it. Each migration is gated
+// on the field it introduces, so it applies once and then stops.
+function migrateExercises(exercises) {
+  const out = { ...exercises };
+  const ht = out.hipThrust;
+  if (ht &amp;&amp; ht.loadFloor == null) {
+    out.hipThrust = { ...ht, label: &quot;Hip Thrust (bench)&quot;, loadFloor: 25, explainer: HIP_THRUST_EXPLAINER };
+  }
+  return out;
+}
+
 
 const SEED_PRACTICE = [
   {
@@ -608,7 +644,7 @@ async function loadState() {
     practice = pr ? JSON.parse(pr.value) : SEED_PRACTICE;
     let exercises = DEFAULT_EXERCISES;
     const ex = lsGet(&quot;exercises-config&quot;);
-    exercises = ex ? mergeExercises(JSON.parse(ex.value)) : SEED_EXERCISES;
+    exercises = migrateExercises(ex ? mergeExercises(JSON.parse(ex.value)) : SEED_EXERCISES);
     const st = lsGet(&quot;stretches-config&quot;);
     const stretches = st ? mergeStretches(JSON.parse(st.value)) : STRETCHES;
     const rc = lsGet(&quot;recipes-config&quot;);
@@ -870,7 +906,45 @@ function orderStretches(list) {
 }
 
 function stretchesForSession(sessionType, allStretches = STRETCHES) {
-  return orderStretches(allStretches.filter((s) =&gt; s.emphasis === &quot;both&quot; || s.emphasis === sessionType));
+  return orderStretches(allStretches.filter((s) =&gt; s.active !== false &amp;&amp; (s.emphasis === &quot;both&quot; || s.emphasis === sessionType)));
+}
+
+// The pool and the session are two different things. A wide pool is what gives
+// the routine somewhere to draw from and somewhere to put a new stretch; a wide
+// session is just ten minutes of holds at the end of a workout, which is the
+// part that gets skipped. So the pool keeps growing and the session stays capped.
+//
+// Three ranges are trained every session because they&#x27;re the ones being trained
+// on purpose — hip flexors and hamstrings for sitting, calves for running.
+// Range gains are specific to the muscle stretched, so these only pay off if
+// they come round almost every time. The remaining slots rotate: whichever of
+// the rest is most overdue, with a nudge toward whatever this session trained,
+// since a static stretch does most for a muscle that has just been worked.
+const STRETCH_SESSION_CAP = 5;
+const STRETCH_ANCHORS = [&quot;hipFlexor&quot;, &quot;hamstring&quot;, &quot;calf&quot;];
+
+function daysSinceStretched(sessions, key) {
+  const done = sessions.filter((s) =&gt; normalizeStretchRounds((s.stretchRounds || {})[key], null) &gt; 0);
+  if (done.length === 0) return 45;
+  const last = done[done.length - 1].date;
+  if (!last) return 45;
+  const [y, m, d] = last.split(&quot;-&quot;).map(Number);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((today.valueOf() - new Date(y, m - 1, d).valueOf()) / 86400000);
+  return Math.max(0, Math.min(45, days));
+}
+
+function selectSessionStretches(sessionType, allStretches = STRETCHES, sessions = [], cap = STRETCH_SESSION_CAP) {
+  const pool = stretchesForSession(sessionType, allStretches);
+  if (pool.length &lt;= cap) return pool;
+  const anchors = pool.filter((s) =&gt; STRETCH_ANCHORS.indexOf(s.key) !== -1);
+  const rest = pool.filter((s) =&gt; STRETCH_ANCHORS.indexOf(s.key) === -1);
+  const slots = Math.max(0, cap - anchors.length);
+  const scored = rest
+    .map((s) =&gt; ({ s, stale: daysSinceStretched(sessions, s.key), matched: s.emphasis === sessionType ? 6 : 0 }))
+    .sort((a, b) =&gt; (b.stale + b.matched) - (a.stale + a.matched) || a.s.key.localeCompare(b.s.key));
+  return orderStretches(anchors.concat(scored.slice(0, slots).map((x) =&gt; x.s)));
 }
 
 // Flexibility is the one goal that responds to frequency more than intensity —
@@ -1198,7 +1272,7 @@ const TIME_WARMUP = 3;
 const TIME_SAUNA = 15;
 const TIME_OVERHEAD = 10; // changing, walking between stations, waiting for equipment
 
-function estimateSessionMinutes(exercises, allStretches, sessionType, cardioMinutes) {
+function estimateSessionMinutes(exercises, allStretches, sessionType, cardioMinutes, sessions = []) {
   const lifting = Object.keys(exercises)
     .filter((k) =&gt; {
       const cfg = exercises[k];
@@ -1208,7 +1282,7 @@ function estimateSessionMinutes(exercises, allStretches, sessionType, cardioMinu
     })
     .reduce((sum, k) =&gt; sum + (exercises[k].estMinutes || 6), 0);
 
-  const stretchSeconds = stretchesForSession(sessionType, allStretches).reduce((sum, cfg) =&gt; {
+  const stretchSeconds = selectSessionStretches(sessionType, allStretches, sessions).reduce((sum, cfg) =&gt; {
     const rounds = cfg.baseRounds || 1;
     return sum + stretchAccum(cfg, rounds) * (cfg.perSide ? 2 : 1);
   }, 0);
@@ -1300,7 +1374,7 @@ function suggestExerciseExpansion(sessions, exercises, allStretches = STRETCHES,
 
   // Time check comes before the prerequisite check: if there&#x27;s no room in the
   // session, it doesn&#x27;t matter whether the foundation is ready.
-  const currentMinutes = estimateSessionMinutes(exercises, allStretches, next.sessionType, cardioMinutes);
+  const currentMinutes = estimateSessionMinutes(exercises, allStretches, next.sessionType, cardioMinutes, sessions);
   if (currentMinutes + (next.estMinutes || 6) &gt; budgetMinutes) {
     return {
       ready: false,
@@ -1346,10 +1420,15 @@ function suggestStretchExpansion(sessions, activeStretches) {
   // Only expand the stretch routine once the current one is actually being
   // done — adding movements to a routine that&#x27;s being skipped just makes it
   // longer and easier to skip.
-  const recent = sessions.slice(-3);
+  // Measured against the stretches that session actually offered, not against
+  // the whole pool. Once sessions are capped, the pool is deliberately larger
+  // than any one session, so scoring against it would read a fully completed
+  // routine as half-finished and freeze the pool at its current size forever.
+  const recent = sessions.slice(-3).filter((s) =&gt; Object.keys(s.stretchRounds || {}).length &gt; 0);
   const completionRate = recent.length === 0 ? 0 : recent.reduce((acc, s) =&gt; {
-    const done = activeStretches.filter((cfg) =&gt; normalizeStretchRounds((s.stretchRounds || {})[cfg.key], cfg) &gt; 0).length;
-    return acc + (activeStretches.length ? done / activeStretches.length : 0);
+    const keys = Object.keys(s.stretchRounds || {});
+    const done = keys.filter((k) =&gt; normalizeStretchRounds(s.stretchRounds[k], activeStretches.find((c) =&gt; c.key === k)) &gt; 0).length;
+    return acc + done / keys.length;
   }, 0) / recent.length;
 
   if (completionRate &lt; 0.7) {
@@ -1411,6 +1490,18 @@ function getExerciseRecommendation(sessions, key, exercises) {
   const secondLast = history[history.length - 2];
   const lastReps = last.reps ?? repLow;
 
+  // Some movements do nothing at all below a certain load — an unloaded hip
+  // thrust is the clearest case, where three sets of twelve is a warm-up rather
+  // than a working set. loadFloor is that threshold. Laddering reps up from zero
+  // would take months to arrive somewhere the exercise should have started, so
+  // the engine steps straight to the floor once the movement is being tolerated.
+  if (cfg.loadFloor &amp;&amp; (last.weight ?? 0) &lt; cfg.loadFloor &amp;&amp; last.feel !== &quot;struggled&quot;) {
+    return {
+      weight: cfg.loadFloor, sets: cfg.targetSets, reps: repLow, action: &quot;load-floor&quot;,
+      rationale: `Bodyweight on the floor sits under the load this movement needs to train anything — moving to the bench version at ${cfg.loadFloor}${cfg.unit} and resetting to ${repLow} reps. Expect it to feel like real work now.`,
+    };
+  }
+
   if (last.feel === &quot;struggled&quot;) {
     const priorStable = [...history].reverse().find((h) =&gt; h.feel === &quot;solid&quot; || h.feel === &quot;easy&quot;);
     const weight = priorStable ? priorStable.weight : Math.max(0, (last.weight ?? effectiveStep) - effectiveStep);
@@ -1465,33 +1556,77 @@ function checkPlateau(sessions, key, exercises) {
   return null;
 }
 
-// Suggests a next cardio target from recent pace/HR trend rather than a
-// fixed number — rewards controlled-effort progress, holds steady when
-// heart rate is climbing faster than distance.
+// Suggests a next cardio target from the trend across recent runs rather than
+// from the last one. Anchoring on the last run means a single short day rewrites
+// the baseline and the next target reads as a demotion, when nothing about the
+// underlying fitness has changed. So: take the last several comparable runs,
+// anchor the distance on the best of them, and let the direction of pace and
+// heart rate across the window decide whether to push, hold or ease off. Runs
+// marked time-constrained are left out of this entirely — they are still
+// logged, they just don&#x27;t get a vote on what the baseline is.
+const CARDIO_WINDOW = 6;
+
+function cardioPace(s) {
+  return s.duration / s.distance;
+}
+
+function cardioMean(xs) {
+  return xs.length ? xs.reduce((a, b) =&gt; a + b, 0) / xs.length : null;
+}
+
 function suggestCardioTarget(sessions, modality = &quot;treadmill&quot;) {
   // Only compare like with like — pool yardage and running miles aren&#x27;t the
   // same units, and pace between them means nothing.
   const history = sessions
-    .filter((s) =&gt; s.distance &amp;&amp; s.duration &amp;&amp; (s.modality || &quot;treadmill&quot;) === modality)
-    .slice(-4);
+    .filter((s) =&gt; s.distance &amp;&amp; s.duration &amp;&amp; (s.modality || &quot;treadmill&quot;) === modality &amp;&amp; !s.timeConstrained)
+    .slice(-CARDIO_WINDOW);
   if (modality === &quot;pool&quot; &amp;&amp; history.length &lt; 2) {
     return { distance: 500, duration: 25, rationale: &quot;New modality — swim easy and find a baseline. Distance in yards.&quot; };
   }
   if (history.length &lt; 2) {
     return { distance: 1.5, duration: 30, rationale: &quot;Building a baseline — aim for a comfortable, sustainable pace.&quot; };
   }
-  const last = history[history.length - 1];
-  const prev = history[history.length - 2];
-  const lastPace = last.duration / last.distance;
-  const prevPace = prev.duration / prev.distance;
-  if (last.distance &gt;= prev.distance &amp;&amp; last.hrAvg &lt;= prev.hrAvg * 1.05) {
-    const distance = Math.round((last.distance + 0.1) * 100) / 100;
-    return { distance, duration: Math.round(distance * lastPace), rationale: `Distance held steady with controlled heart rate last time — nudging target to ${distance}mi.` };
+  const yards = modality === &quot;pool&quot;;
+  const unit = yards ? &quot;yd&quot; : &quot;mi&quot;;
+  const round = (d) =&gt; (yards ? Math.round(d / 25) * 25 : Math.round(d * 100) / 100);
+  const bump = yards ? 50 : 0.1;
+
+  // The anchor is the best distance in the window, not the most recent one.
+  const best = history.reduce((b, s) =&gt; (s.distance &gt; b.distance ? s : b), history[0]);
+
+  // Split the window in half and compare the halves. A single run is noise;
+  // the direction across several is the thing worth responding to.
+  const half = Math.ceil(history.length / 2);
+  const older = history.slice(0, history.length - half);
+  const newer = history.slice(history.length - half);
+  const olderPace = cardioMean(older.map(cardioPace));
+  const newerPace = cardioMean(newer.map(cardioPace));
+  const hrOf = (arr) =&gt; cardioMean(arr.map((s) =&gt; s.hrAvg).filter(Boolean));
+  const olderHr = hrOf(older);
+  const newerHr = hrOf(newer);
+
+  // Plan the target duration at the recent sustainable pace rather than the
+  // pace of the best run — a one-off fast day shouldn&#x27;t set the clock.
+  const pace = newerPace;
+  const n = history.length;
+  const hrDrift = olderHr &amp;&amp; newerHr ? newerHr &gt; olderHr * 1.05 : false;
+  const paceBetter = olderPace ? newerPace &lt; olderPace * 0.98 : false;
+  const paceWorse = olderPace ? newerPace &gt; olderPace * 1.05 : false;
+
+  if (hrDrift) {
+    const distance = round(best.distance);
+    return { distance, duration: Math.round(distance * pace), rationale: `Heart rate has drifted up across your last ${n} runs at much the same distances — holding at your best recent ${best.distance}${unit} so conditioning catches up before adding to it.` };
   }
-  if (last.hrAvg &gt; prev.hrAvg * 1.1) {
-    return { distance: last.distance, duration: last.duration, rationale: &quot;Heart rate climbed relative to distance last session — holding this target so conditioning can catch up before pushing further.&quot; };
+  if (paceBetter) {
+    const distance = round(best.distance + bump);
+    return { distance, duration: Math.round(distance * pace), rationale: `Pace is trending faster across your last ${n} runs with heart rate steady — stepping up from your best recent ${best.distance}${unit} to ${distance}${unit}.` };
   }
-  return { distance: last.distance, duration: last.duration, rationale: &quot;Steady progress — matching last session&#x27;s output today.&quot; };
+  if (paceWorse) {
+    const distance = round(best.distance);
+    return { distance, duration: Math.round(distance * pace), rationale: `Pace has drifted slower over your last ${n} runs. Target stays at your best recent ${best.distance}${unit} — run it at whatever pace feels sustainable rather than chasing the clock.` };
+  }
+  const distance = round(best.distance);
+  return { distance, duration: Math.round(distance * pace), rationale: `Steady across your last ${n} runs — matching your best recent ${best.distance}${unit}.` };
 }
 
 // Builds a plain-language weekly coaching summary tied to the user&#x27;s
@@ -1518,7 +1653,7 @@ function computeCoachSummary(sessions, exercises, plan, sessionType, allStretche
   const rest = assessRestPattern(sessions);
   const balance = assessSessionBalance(sessions, exercises);
   const stretchFreq = assessStretchFrequency(sessions);
-  const stretches = (sessionType ? stretchesForSession(sessionType, allStretches) : orderStretches(allStretches)).map((cfg) =&gt; ({
+  const stretches = (sessionType ? selectSessionStretches(sessionType, allStretches, sessions) : orderStretches(allStretches)).map((cfg) =&gt; ({
     key: cfg.key,
     label: cfg.label,
     cfg,
@@ -1678,8 +1813,9 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
     type: defaultType,
     duration: cardioTarget.duration, distance: cardioTarget.distance, hrAvg: 130, hrMax: 150,
     modality: &quot;treadmill&quot;,
+    timeConstrained: false,
     warmup: null,
-    exercises: {}, stretchRounds: {}, sauna: null, meditation: null, notes: &quot;&quot;,
+    exercises: {}, bodyweight: {}, stretchRounds: {}, sauna: null, meditation: null, notes: &quot;&quot;,
   });
 
   // Write the whole in-progress session out on every change. Cheap (one small
@@ -1691,20 +1827,23 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
   // An exercise belongs in this session if it&#x27;s active and either matches the
   // session type or is marked for both. Exercises with no sessionType set
   // (older saved configs, custom additions) default to appearing in both.
-  const plannedExercises = Object.keys(exercises).filter((k) =&gt; {
+  // A run-only day has no lifting to plan and no movement prep to do, so the
+  // whole middle of the wizard drops out rather than being walked past.
+  const isRun = entry.type === &quot;R&quot;;
+
+  const plannedExercises = isRun ? [] : Object.keys(exercises).filter((k) =&gt; {
     const cfg = exercises[k];
     if (cfg.active === false) return false;
     if (!cfg.sessionType || cfg.sessionType === &quot;both&quot;) return true;
     return cfg.sessionType === entry.type;
   });
 
-  const sessionStretches = useMemo(() =&gt; stretchesForSession(entry.type, stretches), [entry.type, stretches]);
+  const sessionStretches = useMemo(() =&gt; selectSessionStretches(entry.type, stretches, sessions), [entry.type, stretches, sessions]);
+  const stretchPool = useMemo(() =&gt; stretchesForSession(entry.type, stretches), [entry.type, stretches]);
 
-  const steps = [
-    &quot;cardio&quot;, &quot;hr&quot;, &quot;warmup&quot;,
-    ...plannedExercises,
-    &quot;stretches&quot;, &quot;closer&quot;, &quot;review&quot;,
-  ];
+  const steps = isRun
+    ? [&quot;cardio&quot;, &quot;hr&quot;, &quot;bodyweight&quot;, &quot;stretches&quot;, &quot;closer&quot;, &quot;review&quot;]
+    : [&quot;cardio&quot;, &quot;hr&quot;, &quot;warmup&quot;, ...plannedExercises, &quot;stretches&quot;, &quot;closer&quot;, &quot;review&quot;];
   const total = steps.length;
   const current = steps[step];
 
@@ -1774,6 +1913,7 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
             &lt;div style={{ display: &quot;flex&quot;, gap: 8, justifyContent: &quot;center&quot; }}&gt;
               &lt;Chip active={entry.type === &quot;A&quot;} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, type: &quot;A&quot; }))}&gt;Session A&lt;/Chip&gt;
               &lt;Chip active={entry.type === &quot;B&quot;} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, type: &quot;B&quot; }))}&gt;Session B&lt;/Chip&gt;
+              &lt;Chip active={entry.type === &quot;R&quot;} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, type: &quot;R&quot; }))}&gt;Run only&lt;/Chip&gt;
             &lt;/div&gt;
           &lt;/Field&gt;
           &lt;Field label=&quot;Cardio type&quot;&gt;
@@ -1809,6 +1949,15 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
           &lt;Field label={`Distance (${modalityCfg.unit})`}&gt;
             &lt;Stepper value={entry.distance} step={modalityCfg.step} unit={modalityCfg.unit} min={0}
               onChange={(v) =&gt; setEntry((e) =&gt; ({ ...e, distance: modalityCfg.unit === &quot;yd&quot; ? Math.round(v) : Math.round(v * 100) / 100 }))} /&gt;
+          &lt;/Field&gt;
+          &lt;Field label=&quot;Was this a full run?&quot;&gt;
+            &lt;div style={{ display: &quot;flex&quot;, gap: 8, justifyContent: &quot;center&quot; }}&gt;
+              &lt;Chip active={!entry.timeConstrained} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, timeConstrained: false }))}&gt;Full run&lt;/Chip&gt;
+              &lt;Chip active={!!entry.timeConstrained} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, timeConstrained: true }))}&gt;Short on time&lt;/Chip&gt;
+            &lt;/div&gt;
+            &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, marginTop: 8, lineHeight: 1.5, textAlign: &quot;center&quot; }}&gt;
+              A short-on-time run is logged in full but left out of the target maths, so cutting one session short doesn&#x27;t reset what you&#x27;re working from.
+            &lt;/div&gt;
           &lt;/Field&gt;
         &lt;/Card&gt;
       )}
@@ -1850,6 +1999,32 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
         &lt;/Card&gt;
       )}
 
+      {current === &quot;bodyweight&quot; &amp;&amp; (
+        &lt;Card title=&quot;Bodyweight Work&quot; sub=&quot;Optional · anything you did without a gym&quot;&gt;
+          &lt;div style={{
+            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
+            background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
+          }}&gt;
+            Coach: this is logged as work done, not as a strength session — it won&#x27;t count toward the A/B rotation, and leaving it all at zero costs nothing.
+          &lt;/div&gt;
+          &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 12 }}&gt;
+            {BODYWEIGHT.map((b) =&gt; (
+              &lt;div key={b.key}&gt;
+                &lt;Field label={`${b.label} (${b.unit})`}&gt;
+                  &lt;Stepper
+                    value={(entry.bodyweight || {})[b.key] || 0}
+                    step={b.step}
+                    unit={b.unit === &quot;sec&quot; ? &quot;sec&quot; : &quot;reps&quot;}
+                    min={0}
+                    onChange={(v) =&gt; setEntry((e) =&gt; ({ ...e, bodyweight: { ...(e.bodyweight || {}), [b.key]: v } }))}
+                  /&gt;
+                &lt;/Field&gt;
+              &lt;/div&gt;
+            ))}
+          &lt;/div&gt;
+        &lt;/Card&gt;
+      )}
+
       {plannedExercises.includes(current) &amp;&amp; (
         &lt;ExerciseStep
           exKey={current}
@@ -1862,12 +2037,15 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
       )}
 
       {current === &quot;stretches&quot; &amp;&amp; (
-        &lt;Card title=&quot;Stretch Routine&quot; sub={`After training, while warm · Session ${entry.type} emphasis`}&gt;
+        &lt;Card title=&quot;Stretch Routine&quot; sub={isRun ? &quot;After the run, while warm · optional&quot; : `After training, while warm · Session ${entry.type} emphasis`}&gt;
           &lt;div style={{
             fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
             background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
           }}&gt;
             Coach: rounds build toward roughly {STRETCH_TARGET_ACCUM}s total per muscle group — the point where added time stops paying off. Log the rounds you actually did.
+            {stretchPool.length &gt; sessionStretches.length &amp;&amp; (
+              &lt;&gt; {&quot; &quot;}{sessionStretches.length} of your {stretchPool.length} tonight: hip flexors, hamstrings and calves every session, the rest rotating in by whichever is most overdue.&lt;/&gt;
+            )}
           &lt;/div&gt;
           &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 14 }}&gt;
             {sessionStretches.map((s) =&gt; {
@@ -1937,11 +2115,18 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
       {current === &quot;review&quot; &amp;&amp; (
         &lt;Card title=&quot;Review &amp; save&quot; sub=&quot;Here&#x27;s what&#x27;s going in the log&quot;&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 13, color: &quot;#1B1B1B&quot;, lineHeight: 1.9 }}&gt;
-            &lt;div&gt;{entry.duration} min · {entry.distance} mi · HR {entry.hrAvg}/{entry.hrMax}&lt;/div&gt;
+            &lt;div&gt;{isRun ? &quot;Run only&quot; : `Session ${entry.type}`} · {entry.date}&lt;/div&gt;
+            &lt;div&gt;
+              {entry.duration} min · {entry.distance} {modalityCfg.unit} · HR {entry.hrAvg}/{entry.hrMax}
+              {entry.timeConstrained ? &quot; · short on time&quot; : &quot;&quot;}
+            &lt;/div&gt;
             {Object.entries(entry.exercises).map(([k, v]) =&gt; (
               &lt;div key={k}&gt;{exercises[k]?.label || k}: {v.weight ?? 0}{exercises[k]?.unit} × {v.sets ?? 1}×{v.reps} — {v.feel}&lt;/div&gt;
             ))}
-            &lt;div&gt;Movement prep: {entry.warmup || &quot;not set&quot;}&lt;/div&gt;
+            {BODYWEIGHT.filter((b) =&gt; ((entry.bodyweight || {})[b.key] || 0) &gt; 0).map((b) =&gt; (
+              &lt;div key={b.key}&gt;{b.label}: {entry.bodyweight[b.key]} {b.unit}&lt;/div&gt;
+            ))}
+            {!isRun &amp;&amp; &lt;div&gt;Movement prep: {entry.warmup || &quot;not set&quot;}&lt;/div&gt;}
             &lt;div&gt;
               Stretches: {sessionStretches.filter((s) =&gt; normalizeStretchRounds(entry.stretchRounds[s.key], s) &gt; 0).length}/{sessionStretches.length} done
               {&quot; · &quot;}
@@ -2815,6 +3000,8 @@ Absolute rules:
 - Every word you place in &quot;segments&quot; must be the teacher&#x27;s own words, copied verbatim from the page. Do not paraphrase, summarise, modernise, condense or compose. If you cannot copy it, leave it out.
 - Add no commentary, framing or pointers of your own. Not one sentence.
 - Skip navigation, headers, footers, donation appeals, comment threads, copyright notices and audio player text.
+- Some pages return JSON rather than prose. Rebuild the teaching from it before segmenting, and never present JSON keys, segment ids or markup as text.
+- If what comes back holds under roughly 1000 characters of actual teaching — an empty page shell, a page whose talk is audio only, a bare index or a scan with no text layer — return {&quot;error&quot;:&quot;too short&quot;} and nothing else. Do not reconstruct, summarise or fill in a page that did not come back.
 
 Return ONLY a JSON object. No preamble, no markdown fences:
 {
@@ -2834,7 +3021,39 @@ For each segment:
 - &quot;types&quot;: only when the segment speaks to one specific practice. Allowed: &quot;breath&quot;, &quot;bodyScan&quot;, &quot;metta&quot;, &quot;open&quot;. Omit otherwise.
 - &quot;precept&quot;: only when the segment concerns ethical conduct. 1 harming, 2 taking what is not given, 3 sexual misconduct, 4 false speech, 5 intoxicants, 0 for virtue in general. Omit otherwise.
 
-If the page is not a Buddhist teaching, return {&quot;error&quot;:&quot;not a teaching&quot;}.`;
+If the page is readable but is not a Buddhist teaching — an index, a biography, a shop page — return {&quot;error&quot;:&quot;not a teaching&quot;}.`;
+
+// SuttaCentral renders its text in the browser, so fetching the page itself
+// returns an empty shell that used to arrive as a garbled or misleading import.
+// Its text lives behind a JSON API instead, so those links get rewritten before
+// anything is fetched.
+function suttaCentralUid(url) {
+  const m = /^https?:\/\/(?:www\.)?suttacentral\.net\/([a-z]+[0-9][a-z0-9.\-]*)/i.exec((url || &quot;&quot;).trim());
+  return m ? m[1].toLowerCase() : null;
+}
+
+// Below this, whatever came back isn&#x27;t a talk: an app shell, an audio-only page
+// or a scanned PDF with no text layer all land here. Gating on length is what
+// keeps those from being segmented into nonsense and stored as a teaching.
+const TEACHING_MIN_CHARS = 1000;
+
+function teachingRequest(url) {
+  const uid = suttaCentralUid(url);
+  if (!uid) return &quot;Import the teaching at &quot; + url;
+  return [
+    &quot;Import the teaching at &quot; + url + &quot;.&quot;,
+    &quot;&quot;,
+    &quot;That page renders its text in the browser, so fetching it returns an empty shell. Fetch these instead, in order, stopping at the first that returns the text:&quot;,
+    &quot;&quot;,
+    &quot;1. https://suttacentral.net/api/bilarasuttas/&quot; + uid + &quot;/sujato&quot;,
+    &quot;   A JSON object. The translation sits in \&quot;translation_text\&quot;, keyed by segment id. Join those values in the order given by \&quot;keys_order\&quot; (or the object&#x27;s own key order if that is absent), skipping empty strings, to rebuild the text. Segment ids are not part of the teaching.&quot;,
+    &quot;2. https://suttacentral.net/api/extractsutta/&quot; + uid + &quot;/sujato&quot;,
+    &quot;   Use this if the first returns nothing usable, as it does for range suttas.&quot;,
+    &quot;3. The published Bilara data on raw.githubusercontent.com, under suttacentral/bilara-data/published/translation/en/sujato/sutta/, in the folder for that collection — mn8 sits at .../mn/mn8_translation-en-sujato.json, sn12.23 at .../sn/sn12/sn12.23_translation-en-sujato.json. Use this if the first two return a 500.&quot;,
+    &quot;&quot;,
+    &quot;Title, translator and sutta reference come from that data where present; otherwise take the reference from the id &quot; + uid + &quot; and the translator as Bhikkhu Sujato.&quot;,
+  ].join(&quot;\n&quot;);
+}
 
 async function fetchTeaching(url) {
   const key = getApiKey();
@@ -2857,14 +3076,14 @@ async function fetchTeaching(url) {
         tools: [{
           type: &quot;web_fetch_20250910&quot;,
           name: &quot;web_fetch&quot;,
-          max_uses: 3,
+          max_uses: 4,
           max_content_tokens: 40000,
         }],
         messages,
       }),
     });
 
-  let messages: any[] = [{ role: &quot;user&quot;, content: &quot;Import the teaching at &quot; + url }];
+  let messages: any[] = [{ role: &quot;user&quot;, content: teachingRequest(url) }];
   let blocks: any[] = [];
   let stop: any = null;
   // Same pause_turn handling as the recipe import: a server-side fetch can
@@ -2898,7 +3117,9 @@ async function fetchTeaching(url) {
   } catch (e) {
     throw new Error(stop === &quot;max_tokens&quot; ? &quot;truncated&quot; : &quot;unreadable&quot;);
   }
-  if (parsed &amp;&amp; parsed.error) throw new Error(&quot;not-a-teaching&quot;);
+  if (parsed &amp;&amp; parsed.error) {
+    throw new Error(String(parsed.error).indexOf(&quot;short&quot;) !== -1 ? &quot;too-short&quot; : &quot;not-a-teaching&quot;);
+  }
 
   const segsIn = Array.isArray(parsed.segments) ? parsed.segments : [];
   // Trust nothing about the shape coming back. A stray precept of 9 or a types
@@ -2920,6 +3141,9 @@ async function fetchTeaching(url) {
     segments.push(seg);
   }
   if (!segments.length) throw new Error(&quot;empty&quot;);
+  // Second gate, on what actually arrived rather than on what the reader said
+  // about it. An app shell can still produce two or three stray segments.
+  if (chars &lt; TEACHING_MIN_CHARS) throw new Error(&quot;too-short&quot;);
 
   return {
     id: Date.now(),
@@ -2935,10 +3159,11 @@ async function fetchTeaching(url) {
 
 const TEACHING_ERRORS = {
   &quot;no-key&quot;: &quot;No API key saved yet \u2014 add one under Plan \u00B7 Settings first.&quot;,
-  &quot;not-a-teaching&quot;: &quot;That page didn&#x27;t read as a teaching. Check the link points at the talk itself.&quot;,
+  &quot;not-a-teaching&quot;: &quot;That page read fine, but it&#x27;s an index, a biography or a listing rather than a talk. Open the talk itself and use that link.&quot;,
+  &quot;too-short&quot;: &quot;Almost no readable text came off that page. Audio-only talks, PDF-only sites and pages that build themselves in the browser all arrive empty. Look for a page with the transcript written out as text.&quot;,
   truncated: &quot;That talk came back longer than there was room for. Try a single talk rather than a whole collection page.&quot;,
   unreadable: &quot;The reply came back garbled. Worth trying once more.&quot;,
-  empty: &quot;Nothing readable came off that page.&quot;,
+  empty: &quot;Nothing readable came off that page \u2014 most likely audio-only or a PDF.&quot;,
 };
 
 // ---------- the teachings card on the Practice tab ----------
@@ -3012,7 +3237,7 @@ function TeachingsCard({ teachings, setTeachings }) {
         &lt;input
           value={url}
           onChange={(e) =&gt; setUrl(e.target.value)}
-          placeholder=&quot;https://suttacentral.net/...&quot;
+          placeholder=&quot;https://www.accesstoinsight.org/...&quot;
           style={{ width: &quot;100%&quot;, boxSizing: &quot;border-box&quot;, borderRadius: 0, border: &quot;2px solid #1B1B1B&quot;, padding: &quot;10px 12px&quot;, fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12.5, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot; }}
         /&gt;
         &lt;button
@@ -3038,7 +3263,7 @@ function TeachingsCard({ teachings, setTeachings }) {
 
       {teachings.length === 0 ? (
         &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#6E6759&quot;, lineHeight: 1.6 }}&gt;
-          Nothing imported yet. suttacentral.net, dhammatalks.org, accesstoinsight.org, forestsangha.org and bswa.org all read cleanly.
+          Nothing imported yet. accesstoinsight.org, dhammatalks.org, ajahnchah.org, plumvillage.org transcriptions and insightmeditationcenter.org transcribed talks all read cleanly, and suttacentral.net links are rewritten to its text API. Audio-only talks and PDF-only sites — Forest Sangha, Amaravati, audiodharma — have no text to import.
         &lt;/div&gt;
       ) : (
         &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 12 }}&gt;
@@ -3760,8 +3985,8 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
   const [showExpansionDetail, setShowExpansionDetail] = useState(false);
   const coach = useMemo(() =&gt; computeCoachSummary(sessions, exercises, plan, nextType, stretches), [sessions, exercises, plan, nextType, stretches]);
   const sessionMinutes = useMemo(
-    () =&gt; estimateSessionMinutes(exercises, stretches, nextType, coach.cardio.duration),
-    [exercises, stretches, nextType, coach.cardio.duration]
+    () =&gt; estimateSessionMinutes(exercises, stretches, nextType, coach.cardio.duration, sessions),
+    [exercises, stretches, nextType, coach.cardio.duration, sessions]
   );
   const expansion = useMemo(
     () =&gt; suggestExerciseExpansion(sessions, exercises, stretches, nextType, plan.sessionBudgetMinutes || 120, coach.cardio.duration),
