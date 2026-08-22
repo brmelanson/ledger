@@ -17287,6 +17287,9 @@ const Key = (p) => react_1.default.createElement(Icon, { ...p },
     react_1.default.createElement("circle", { cx: "7.5", cy: "15.5", r: "5.5" }),
     react_1.default.createElement("path", { d: "M21 2l-9.6 9.6" }),
     react_1.default.createElement("path", { d: "M15.5 7.5l3 3L22 7l-3-3" }));
+const Pencil = (p) => react_1.default.createElement(Icon, { ...p },
+    react_1.default.createElement("path", { d: "M12 20h9" }),
+    react_1.default.createElement("path", { d: "M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z" }));
 // ---------- seed data ----------
 const SEED_SESSIONS = [
     { "id": 1, "date": "2026-06-29", "type": "A", "duration": 30, "distance": 1.38, "hrAvg": 118, "hrMax": 139, "exercises": {}, "stretches": "full", "sauna": false, "notes": "First session back." },
@@ -20423,6 +20426,29 @@ function App() {
         setToast("Session saved");
         setTimeout(() => setToast(null), 2500);
     }, [sessions]);
+    // Corrections to an already-saved session. The sort matters: a fixed date can
+    // move a session out of insertion order, and everything that reads history —
+    // the coach, the ladder, the A/B alternation — walks the array in order rather
+    // than sorting first.
+    const handleSessionUpdate = (0, react_1.useCallback)((id, patch) => {
+        setSessions((prev) => {
+            const next = prev.map((s) => (s.id === id ? { ...s, ...patch } : s));
+            next.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+            saveSessions(next);
+            return next;
+        });
+        setToast("Session updated");
+        setTimeout(() => setToast(null), 2000);
+    }, []);
+    const handleSessionDelete = (0, react_1.useCallback)((id) => {
+        setSessions((prev) => {
+            const next = prev.filter((s) => s.id !== id);
+            saveSessions(next);
+            return next;
+        });
+        setToast("Session deleted");
+        setTimeout(() => setToast(null), 2000);
+    }, []);
     const lastSession = sessions[sessions.length - 1];
     const nextRestDays = 1;
     const runTrend = (0, react_1.useMemo)(() => sessions.filter(s => s.distance).map((s, i) => ({ i: i + 1, distance: s.distance, hr: s.hrAvg })), [sessions]);
@@ -20492,7 +20518,7 @@ function App() {
                 react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
                     react_1.default.createElement("button", { onClick: () => setLogging(true), style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Resume"),
                     react_1.default.createElement("button", { onClick: () => { clearDraft(); setDraft(null); }, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Discard")))),
-            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete, teachings: teachings, setTeachings: updateTeachings })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice, sila: sila, kitchenRules: kitchenRules, teachings: teachings })),
+            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete, teachings: teachings, setTeachings: updateTeachings })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan, onUpdateSession: handleSessionUpdate, onDeleteSession: handleSessionDelete })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice, sila: sila, kitchenRules: kitchenRules, teachings: teachings })),
             toast && (react_1.default.createElement("div", { style: {
                     position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
                     background: "#1B1B1B", color: "#F9F6EE", padding: "10px 20px", borderRadius: 0,
@@ -21868,58 +21894,156 @@ function KitchenTab({ recipes, setRecipes, mealPlan, setMealPlan, sessions, rule
                     ": never again",
                     r.verdictNote ? ` (${r.verdictNote})` : "")))))));
 }
-function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [], mealPlan = [] }) {
-    return (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, [...sessions].reverse().map((s) => (react_1.default.createElement("div", { key: s.id, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "14px 18px" } },
-        react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline" } },
-            react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontWeight: 600, fontSize: 15, color: "#1B1B1B" } },
-                s.date,
-                " ",
-                s.type && s.type !== "logged" && react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759" } },
-                    "\u00B7 ",
-                    s.type)),
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--activity)" } }, s.distance ? `${s.distance} mi` : "")),
-        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#6E6759", marginTop: 4 } },
-            s.duration,
-            "min \u00B7 HR ",
-            s.hrAvg,
-            "/",
-            s.hrMax),
-        s.exercises && Object.keys(s.exercises).length > 0 && (react_1.default.createElement("div", { style: { marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 } }, Object.entries(s.exercises).map(([k, v]) => (react_1.default.createElement("span", { key: k, style: {
-                fontFamily: "'Inter', sans-serif", fontSize: 11, padding: "4px 8px",
-                borderRadius: 0, background: "#D8D0BF", color: "#1B1B1B",
-            } },
-            exercises[k]?.label || k,
-            ": ",
-            v.weight ?? 0,
-            exercises[k]?.unit))))),
-        (() => {
-            const done = allStretches.filter((cfg) => normalizeStretchRounds((s.stretchRounds || {})[cfg.key], cfg) > 0);
-            if (done.length === 0)
-                return null;
-            const total = done.reduce((sum, cfg) => sum + stretchAccum(cfg, normalizeStretchRounds(s.stretchRounds[cfg.key], cfg)), 0);
-            return (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759", marginTop: 6 } },
-                "Stretch: ",
-                done.length,
-                " movement",
-                done.length === 1 ? "" : "s",
-                " \u00B7 ",
-                total,
-                "s total"));
-        })(),
-        (() => {
-            const key = recipeForWeek(mealPlan, s.date);
-            const r = key && recipes.find((x) => x.key === key);
-            if (!r)
-                return null;
-            return (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, marginTop: 6 } },
-                react_1.default.createElement("span", { style: { background: "#FFC400", color: "#1B1B1B", padding: "2px 6px", textTransform: "uppercase", letterSpacing: 0.6 } },
-                    r.protein,
-                    " week"),
-                react_1.default.createElement("span", { style: { color: "#6E6759", marginLeft: 6 } },
-                    r.proteinG,
-                    "g protein/lunch")));
-        })(),
-        s.notes && react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 8, fontStyle: "italic" } }, s.notes))))));
+// A small square button for the corner of a history card. Deliberately not a
+// Chip: these are destructive-adjacent controls that sit next to the reading
+// matter, so they stay quiet until they're the active one.
+const cardIconBtn = (activeColor) => ({
+    width: 28, height: 28, borderRadius: 0, border: "2px solid #D8D0BF", background: "#F9F6EE",
+    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+    color: activeColor || "#6E6759", flex: "0 0 auto", padding: 0,
+});
+// A logged session is a record, not a receipt. A number mis-tapped on the gym
+// floor doesn't just sit there looking wrong — the coach reads the last logged
+// weight to decide what to recommend next time, so a stray 0 sets the ladder
+// back to the bottom. This is the way back into one.
+//
+// The editor holds a local draft and writes only on Save. Committing on every
+// stepper press would mean a dozen separate writes to storage for one
+// correction, and no way to back out halfway through.
+function SessionEditor({ session, exercises, onSave, onCancel }) {
+    const [draft, setDraft] = (0, react_1.useState)(session);
+    const modalityCfg = MODALITIES.find((m) => m.key === draft.modality) || MODALITIES[0];
+    const logged = Object.keys(draft.exercises || {});
+    const setField = (field, v) => setDraft((d) => ({ ...d, [field]: v }));
+    const setEx = (key, field, v) => setDraft((d) => ({
+        ...d,
+        exercises: { ...(d.exercises || {}), [key]: { ...((d.exercises || {})[key] || {}), [field]: v } },
+    }));
+    const dropEx = (key) => setDraft((d) => {
+        const next = { ...(d.exercises || {}) };
+        delete next[key];
+        return { ...d, exercises: next };
+    });
+    const fieldInput = {
+        width: "100%", border: "2px solid #1B1B1B", borderRadius: 0, padding: "9px 12px",
+        fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, background: "#F9F6EE", color: "#1B1B1B",
+    };
+    return (react_1.default.createElement("div", { style: { marginTop: 14, borderTop: "2px solid #1B1B1B", paddingTop: 16, display: "flex", flexDirection: "column", gap: 18 } },
+        react_1.default.createElement(Field, { label: "Date" },
+            react_1.default.createElement("input", { type: "date", value: draft.date, max: localDateStr(), onChange: (ev) => ev.target.value && setField("date", ev.target.value), style: fieldInput })),
+        react_1.default.createElement(Field, { label: "Duration (min : sec)" },
+            react_1.default.createElement(StepperPair, null,
+                react_1.default.createElement(Stepper, { value: Math.floor(draft.duration || 0), step: 1, unit: "min", min: 0, onChange: (v) => setField("duration", v + ((draft.duration || 0) % 1)) }),
+                react_1.default.createElement(Stepper, { value: Math.round(((draft.duration || 0) % 1) * 60), step: 15, unit: "sec", min: 0, onChange: (v) => {
+                        const mins = Math.floor(draft.duration || 0);
+                        setField("duration", v >= 60 ? mins + 1 : mins + v / 60);
+                    } }))),
+        react_1.default.createElement(Field, { label: `Distance (${modalityCfg.unit})` },
+            react_1.default.createElement(Stepper, { value: draft.distance || 0, step: modalityCfg.step, unit: modalityCfg.unit, min: 0, onChange: (v) => setField("distance", modalityCfg.unit === "yd" ? Math.round(v) : Math.round(v * 100) / 100) })),
+        react_1.default.createElement(Field, { label: "Heart rate" },
+            react_1.default.createElement(StepperPair, null,
+                react_1.default.createElement(Stepper, { value: draft.hrAvg, step: 1, unit: "avg", min: 0, onChange: (v) => setField("hrAvg", v) }),
+                react_1.default.createElement(Stepper, { value: draft.hrMax, step: 1, unit: "max", min: 0, onChange: (v) => setField("hrMax", v) }))),
+        logged.length === 0 && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", textAlign: "center", lineHeight: 1.5 } }, "No lifts recorded in this session. Only what was logged at the time can be corrected here.")),
+        logged.map((k) => {
+            const cfg = exercises[k] || { label: k, unit: "lb", step: 5 };
+            const v = (draft.exercises || {})[k] || {};
+            return (react_1.default.createElement("div", { key: k, style: { borderTop: "1px solid #D8D0BF", paddingTop: 14, display: "flex", flexDirection: "column", gap: 14 } },
+                react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontWeight: 600, fontSize: 15, color: "#1B1B1B", textAlign: "center" } }, cfg.label),
+                v.weight != null && (react_1.default.createElement(Field, { label: "Weight used" },
+                    react_1.default.createElement(Stepper, { value: v.weight, step: cfg.step || 5, unit: cfg.unit || "lb", min: 0, onChange: (n) => setEx(k, "weight", n) }))),
+                react_1.default.createElement(Field, { label: v.sets != null ? "Sets × Reps" : "Reps" },
+                    react_1.default.createElement(StepperPair, null,
+                        v.sets != null && react_1.default.createElement(Stepper, { value: v.sets, step: 1, unit: "sets", min: 1, onChange: (n) => setEx(k, "sets", n) }),
+                        react_1.default.createElement(Stepper, { value: v.reps, step: 1, unit: "reps", min: 1, onChange: (n) => setEx(k, "reps", n) }))),
+                react_1.default.createElement(Field, { label: "How'd it feel?" },
+                    react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, FEEL_OPTIONS.map((f) => (react_1.default.createElement(Chip, { key: f.key, active: v.feel === f.key, color: f.color, onClick: () => setEx(k, "feel", f.key) }, f.label))))),
+                react_1.default.createElement("button", { onClick: () => dropEx(k), style: { ...btnGhost, width: "100%", justifyContent: "center", padding: "9px 12px", fontSize: 12.5, borderColor: "#BE3B2A", color: "#BE3B2A" } },
+                    "Remove ",
+                    cfg.label,
+                    " from this session")));
+        }),
+        react_1.default.createElement(Field, { label: "Notes" },
+            react_1.default.createElement("textarea", { value: draft.notes || "", onChange: (ev) => setField("notes", ev.target.value), placeholder: "Optional \u2014 form notes, how it felt, etc.", style: {
+                    width: "100%", minHeight: 70, borderRadius: 0, border: "2px solid #1B1B1B",
+                    padding: 10, fontFamily: "'Inter', sans-serif", fontSize: 14, resize: "vertical",
+                    background: "#F9F6EE", color: "#1B1B1B",
+                } })),
+        react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
+            react_1.default.createElement("button", { onClick: onCancel, style: { ...btnGhost, flex: 1, justifyContent: "center" } }, "Cancel"),
+            react_1.default.createElement("button", { onClick: () => onSave(draft), style: { ...btnPrimary, flex: 1, justifyContent: "center" } },
+                react_1.default.createElement(Check, { size: 16 }),
+                " Save changes"))));
+}
+function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [], mealPlan = [], onUpdateSession, onDeleteSession }) {
+    const [editingId, setEditingId] = (0, react_1.useState)(null);
+    const [confirmId, setConfirmId] = (0, react_1.useState)(null);
+    return (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, [...sessions].reverse().map((s) => {
+        const editing = editingId === s.id;
+        return (react_1.default.createElement("div", { key: s.id, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "14px 18px" } },
+            react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
+                react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontWeight: 600, fontSize: 15, color: "#1B1B1B" } },
+                    s.date,
+                    " ",
+                    s.type && s.type !== "logged" && react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759" } },
+                        "\u00B7 ",
+                        s.type)),
+                react_1.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, flex: "0 0 auto" } },
+                    react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "var(--activity)" } }, s.distance ? `${s.distance} mi` : ""),
+                    onUpdateSession && (react_1.default.createElement("button", { onClick: () => { setEditingId(editing ? null : s.id); setConfirmId(null); }, "aria-label": "Edit session", title: "Edit session", style: cardIconBtn(editing ? "var(--activity)" : null) },
+                        react_1.default.createElement(Pencil, { size: 13 }))),
+                    onDeleteSession && (react_1.default.createElement("button", { onClick: () => { setConfirmId(confirmId === s.id ? null : s.id); setEditingId(null); }, "aria-label": "Delete session", title: "Delete session", style: cardIconBtn(confirmId === s.id ? "#BE3B2A" : null) },
+                        react_1.default.createElement(X, { size: 13 }))))),
+            !editing && (react_1.default.createElement(react_1.default.Fragment, null,
+                react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: "#6E6759", marginTop: 4 } },
+                    s.duration,
+                    "min \u00B7 HR ",
+                    s.hrAvg,
+                    "/",
+                    s.hrMax),
+                s.exercises && Object.keys(s.exercises).length > 0 && (react_1.default.createElement("div", { style: { marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 } }, Object.entries(s.exercises).map(([k, v]) => (react_1.default.createElement("span", { key: k, style: {
+                        fontFamily: "'Inter', sans-serif", fontSize: 11, padding: "4px 8px",
+                        borderRadius: 0, background: "#D8D0BF", color: "#1B1B1B",
+                    } },
+                    exercises[k]?.label || k,
+                    ": ",
+                    v.weight ?? 0,
+                    exercises[k]?.unit))))),
+                (() => {
+                    const done = allStretches.filter((cfg) => normalizeStretchRounds((s.stretchRounds || {})[cfg.key], cfg) > 0);
+                    if (done.length === 0)
+                        return null;
+                    const total = done.reduce((sum, cfg) => sum + stretchAccum(cfg, normalizeStretchRounds(s.stretchRounds[cfg.key], cfg)), 0);
+                    return (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759", marginTop: 6 } },
+                        "Stretch: ",
+                        done.length,
+                        " movement",
+                        done.length === 1 ? "" : "s",
+                        " \u00B7 ",
+                        total,
+                        "s total"));
+                })(),
+                (() => {
+                    const key = recipeForWeek(mealPlan, s.date);
+                    const r = key && recipes.find((x) => x.key === key);
+                    if (!r)
+                        return null;
+                    return (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, marginTop: 6 } },
+                        react_1.default.createElement("span", { style: { background: "#FFC400", color: "#1B1B1B", padding: "2px 6px", textTransform: "uppercase", letterSpacing: 0.6 } },
+                            r.protein,
+                            " week"),
+                        react_1.default.createElement("span", { style: { color: "#6E6759", marginLeft: 6 } },
+                            r.proteinG,
+                            "g protein/lunch")));
+                })(),
+                s.notes && react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 8, fontStyle: "italic" } }, s.notes))),
+            confirmId === s.id && (react_1.default.createElement("div", { style: { marginTop: 10, border: "2px solid #BE3B2A", background: "#F9E4DE", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 } },
+                react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, fontWeight: 600, color: "#BE3B2A", lineHeight: 1.5 } }, "Delete this whole session? The run, the lifts and the notes all go with it, and there's no undo."),
+                react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
+                    react_1.default.createElement("button", { onClick: () => setConfirmId(null), style: { ...btnGhost, flex: 1, justifyContent: "center", padding: "8px 12px", fontSize: 12.5 } }, "Keep it"),
+                    react_1.default.createElement("button", { onClick: () => { setConfirmId(null); onDeleteSession(s.id); }, style: { ...btnPrimary, background: "#BE3B2A", flex: 1, justifyContent: "center", padding: "8px 12px", fontSize: 12.5 } }, "Delete")))),
+            editing && (react_1.default.createElement(SessionEditor, { key: s.id, session: s, exercises: exercises, onCancel: () => setEditingId(null), onSave: (next) => { setEditingId(null); onUpdateSession(s.id, next); } }))));
+    })));
 }
 function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, sila = {}, kitchenRules = [], teachings = [] }) {
     const [showAdd, setShowAdd] = (0, react_1.useState)(false);
