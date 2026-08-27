@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the History tab is editable. Each session card carries a pencil and an X in its top corner; the pencil opens a SessionEditor holding a local draft of that session — date, duration, distance, average and max heart rate, then every logged lift's weight, sets, reps and feel, plus notes — and writes once on Save rather than on every stepper press, so one correction is one storage write and Cancel actually backs out. Individual lifts can be dropped from a session; the X deletes the whole session behind the same red confirm block the Practice tab uses. handleSessionUpdate re-sorts sessions by date after an edit, because a corrected date would otherwise leave the array out of insertion order and every reader of history — the coach, the progression ladder, the A/B alternation — walks it in order rather than sorting first. The read-only summary is hidden while a card is being edited so the draft is the only set of numbers on screen. Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: the teachings importer rewrites suttacentral.net links to its JSON text API (bilarasuttas, falling back to extractsutta and then the published bilara-data on raw.githubusercontent) and rebuilds the text from translation_text in keys_order; a 1000-character floor (TEACHING_MIN_CHARS) now gates every import both in the system prompt and on the assembled segments, so app shells, audio-only pages and text-free PDFs are rejected as “too-short” rather than segmented into nonsense, and the error strings name the real failure. suggestCardioTarget was rebuilt around a six-run window (CARDIO_WINDOW): the distance anchors on the best run in the window rather than the most recent, the window is split in half to read pace and heart-rate direction, and sessions flagged timeConstrained are excluded from the maths while still being logged. A third session type “R” (run-only) skips movement prep and lifting, offers an optional BODYWEIGHT step stored outside entry.exercises so it can never read as a strength session, and is excluded from the A/B alternation and balance checks. Stretch sessions are capped at STRETCH_SESSION_CAP (5) drawn by selectSessionStretches from the full pool: STRETCH_ANCHORS (hip flexor, hamstring, calf) every session, the remaining slots scored on days since last stretched plus a bonus for matching the session emphasis; suggestStretchExpansion now measures completion against what each session offered rather than the whole pool. hipThrust moved to the loaded bench version via a loadFloor field (25lb) honoured in getExerciseRecommendation, reaching already-stored configs through a new migrateExercises step in the load path.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: RunGraph joins the Progression wall on Today, above the lift ladders. It merges treadmill and outdoor runs (both miles; pool is yards and stays out) into one picture capped at RUN_GRAPH_MAX (24) runs. Distance is plotted as dots rather than a step line, because run distance moves every session and the ladder&#x27;s step-after drawing would be a jagged line wearing a staircase costume; what actually steps is the target, so the target gets the ember step line. Each target value is replayed through suggestCardioTarget on sessions.slice(0, run.index) for that run&#x27;s modality, so the line can never disagree with the plan the coach shows, and one extra value on the end carries today&#x27;s target as the trailing segment past the last dot. Runs flagged timeConstrained render as hollow muted dots — visible, but still excluded from the targeting maths as before. Pace sits in its own band below a hairline rule rather than over the dots, where it read as a trend line through them, and its scale is inverted so a faster run is higher up. Previously: the History tab is editable — each session card carries a pencil and an X; the pencil opens a SessionEditor holding a local draft (date, duration, distance, average and max heart rate, every logged lift&#x27;s weight, sets, reps and feel, plus notes) and writes once on Save, and handleSessionUpdate re-sorts sessions by date afterwards because every reader of history — the coach, the progression ladder, the A/B alternation — walks the array in order rather than sorting first. The teachings importer rewrites suttacentral.net links to its JSON text API with fallbacks and gates every import on TEACHING_MIN_CHARS (1000). suggestCardioTarget runs on a six-run window (CARDIO_WINDOW), anchoring distance on the best run in the window and splitting the window in half to read pace and heart-rate direction. Session type “R” (run-only) skips movement prep and lifting and stays out of the A/B alternation. Stretches are capped at STRETCH_SESSION_CAP (5). hipThrust uses the loaded bench version via loadFloor (25lb), reaching stored configs through migrateExercises.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -2335,6 +2335,135 @@ function Sparkline({ data, width = 300, height = 60, color = &quot;var(--activit
   );
 }
 
+// ---------- running ----------
+// The lift ladders plot weight, which genuinely holds flat and then jumps, so a
+// step line tells the truth about them. Run distance moves every single session,
+// so drawing runs the same way would be a jagged line wearing a staircase
+// costume. What actually steps in the cardio system is the target, so the target
+// gets the step line and the runs get plotted as what they are: points scattered
+// around it. Pace rides underneath on its own scale, inverted so that a faster
+// run reads as higher up, which is the only way it can sit next to a rising
+// target line without looking like the two disagree.
+const RUN_MODALITIES = [&quot;treadmill&quot;, &quot;outdoor&quot;];
+const RUN_GRAPH_MAX = 24;
+
+// Treadmill and outdoor are both miles, so they share one picture. Pool is
+// yards and belongs nowhere near this scale.
+function runSeries(sessions) {
+  const out = [];
+  sessions.forEach((s, i) =&gt; {
+    const modality = s.modality || &quot;treadmill&quot;;
+    if (!RUN_MODALITIES.includes(modality)) return;
+    if (!s.distance || !s.duration) return;
+    out.push({
+      index: i,
+      date: s.date,
+      modality,
+      distance: s.distance,
+      pace: cardioPace(s),
+      short: !!s.timeConstrained,
+    });
+  });
+  return out.slice(-RUN_GRAPH_MAX);
+}
+
+function paceLabel(p) {
+  if (!isFinite(p) || p &lt;= 0) return &quot;—&quot;;
+  let m = Math.floor(p);
+  let sec = Math.round((p - m) * 60);
+  if (sec === 60) { m += 1; sec = 0; }
+  return `${m}:${String(sec).padStart(2, &quot;0&quot;)}`;
+}
+
+function RunGraph({ sessions }) {
+  const runs = useMemo(() =&gt; runSeries(sessions), [sessions]);
+
+  // The target going into each run, replayed through the same function the coach
+  // calls, so the line drawn here can never disagree with the plan on screen.
+  // The extra value on the end is today&#x27;s target, which is what the trailing
+  // segment past the last dot is showing.
+  const targets = useMemo(() =&gt; {
+    if (runs.length === 0) return [];
+    const past = runs.map((r) =&gt; suggestCardioTarget(sessions.slice(0, r.index), r.modality).distance);
+    past.push(suggestCardioTarget(sessions, runs[runs.length - 1].modality).distance);
+    return past;
+  }, [runs, sessions]);
+
+  if (runs.length === 0) return null;
+
+  // Two bands, not one plot. Pace lives on an inverted scale, and when it was
+  // drawn over the distance dots it read as a trend line through them, which is
+  // a different claim entirely. Separated by a hairline, each scale means only
+  // what it says.
+  const width = 340, height = 120;
+  const dTop = 10, dBot = 80;          // distance + target
+  const rule = 86;
+  const pTop = 94, pBot = 112;         // pace ribbon
+  const n = runs.length;
+  // One slot per run plus a trailing slot for today&#x27;s target. Dots sit centred
+  // in their slot so each lands on the target segment it was run against.
+  const stepX = width / (n + 1);
+  const xRun = (i) =&gt; +((i + 0.5) * stepX).toFixed(1);
+
+  const dVals = runs.map((r) =&gt; r.distance).concat(targets);
+  const dMin = Math.min(...dVals), dMax = Math.max(...dVals);
+  const dPad = (dMax - dMin) * 0.15 || 0.1;
+  const dLo = dMin - dPad, dHi = dMax + dPad;
+  const yD = (v) =&gt; +(dBot - ((v - dLo) / (dHi - dLo || 1)) * (dBot - dTop)).toFixed(1);
+
+  const pVals = runs.map((r) =&gt; r.pace);
+  const pMin = Math.min(...pVals), pMax = Math.max(...pVals);
+  const pPad = (pMax - pMin) * 0.2 || 0.5;
+  const pLo = pMin - pPad, pHi = pMax + pPad;
+  // Inverted deliberately: a lower pace is a faster run, so it belongs higher.
+  const yP = (v) =&gt; +(pTop + ((v - pLo) / (pHi - pLo || 1)) * (pBot - pTop)).toFixed(1);
+
+  let targetPath = `M 0 ${yD(targets[0])}`;
+  for (let i = 1; i &lt;= n; i++) {
+    const x = +(i * stepX).toFixed(1);
+    targetPath += ` L ${x} ${yD(targets[i - 1])} L ${x} ${yD(targets[i])}`;
+  }
+  targetPath += ` L ${width} ${yD(targets[n])}`;
+
+  const pacePath = runs.map((r, i) =&gt; `${i === 0 ? &quot;M&quot; : &quot;L&quot;} ${xRun(i)} ${yP(r.pace)}`).join(&quot; &quot;);
+  const dotR = n &gt; 16 ? 2.8 : 3.5;
+
+  const last = runs[n - 1];
+  const anyShort = runs.some((r) =&gt; r.short);
+
+  return (
+    &lt;div style={{ background: &quot;#F9F6EE&quot;, border: &quot;2.5px solid #1B1B1B&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, borderRadius: 0, padding: &quot;18px 20px&quot; }}&gt;
+      &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;baseline&quot;, marginBottom: 2 }}&gt;
+        &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot; }}&gt;Running&lt;/div&gt;
+        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 13, color: &quot;var(--activity)&quot;, fontWeight: 600 }}&gt;
+          {last.distance}mi
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot;, marginBottom: 8 }}&gt;
+        Target {targets[n]}mi · last {paceLabel(last.pace)}/mi
+      &lt;/div&gt;
+
+      &lt;svg width=&quot;100%&quot; height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio=&quot;none&quot; style={{ display: &quot;block&quot; }}&gt;
+        &lt;path d={targetPath} fill=&quot;none&quot; stroke=&quot;var(--activity)&quot; strokeWidth=&quot;2.5&quot; strokeLinejoin=&quot;round&quot; /&gt;
+        {runs.map((r, i) =&gt; (
+          &lt;circle key={i} cx={xRun(i)} cy={yD(r.distance)} r={r.short ? dotR - 0.7 : dotR}
+            fill={r.short ? &quot;#F9F6EE&quot; : &quot;#1B1B1B&quot;}
+            stroke={r.short ? &quot;#A9A192&quot; : &quot;#1B1B1B&quot;} strokeWidth=&quot;1.5&quot; /&gt;
+        ))}
+        &lt;line x1=&quot;0&quot; y1={rule} x2={width} y2={rule} stroke=&quot;#D8D0BF&quot; strokeWidth=&quot;1&quot; /&gt;
+        &lt;path d={pacePath} fill=&quot;none&quot; stroke=&quot;#8C8375&quot; strokeWidth=&quot;1.5&quot; strokeDasharray=&quot;3 2.5&quot; strokeLinejoin=&quot;round&quot; /&gt;
+      &lt;/svg&gt;
+
+      &lt;div style={{ display: &quot;flex&quot;, gap: 12, flexWrap: &quot;wrap&quot;, marginTop: 8, fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 0.5, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;
+        &lt;span style={{ color: &quot;#1B1B1B&quot; }}&gt;● run&lt;/span&gt;
+        {anyShort &amp;&amp; &lt;span style={{ color: &quot;#A9A192&quot; }}&gt;○ short on time&lt;/span&gt;}
+        &lt;span style={{ color: &quot;var(--activity)&quot; }}&gt;▬ target&lt;/span&gt;
+        &lt;span&gt;┄ pace · faster up&lt;/span&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
 // ---------- practice (daily meditation + journal) ----------
 // ---------- how the mind was (non-ranked) ----------
 // Replaces the old restless -&gt; absorbed scale, which ranked sits by depth of
@@ -4211,6 +4340,7 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
 
       &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot;, marginTop: 4 }}&gt;Progression&lt;/div&gt;
       &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 10 }}&gt;
+        &lt;RunGraph sessions={sessions} /&gt;
         {Object.keys(exercises).filter(k =&gt; {
           const cfg = exercises[k];
           if (cfg.active === false) return false;

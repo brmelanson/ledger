@@ -19349,6 +19349,121 @@ function Sparkline({ data, width = 300, height = 60, color = "var(--activity)" }
         react_1.default.createElement("path", { d: path, fill: "none", stroke: color, strokeWidth: "2.5", strokeLinejoin: "round" }),
         data.map((v, i) => (react_1.default.createElement("circle", { key: i, cx: (i * stepX).toFixed(1), cy: toY(v).toFixed(1), r: "3", fill: color })))));
 }
+// ---------- running ----------
+// The lift ladders plot weight, which genuinely holds flat and then jumps, so a
+// step line tells the truth about them. Run distance moves every single session,
+// so drawing runs the same way would be a jagged line wearing a staircase
+// costume. What actually steps in the cardio system is the target, so the target
+// gets the step line and the runs get plotted as what they are: points scattered
+// around it. Pace rides underneath on its own scale, inverted so that a faster
+// run reads as higher up, which is the only way it can sit next to a rising
+// target line without looking like the two disagree.
+const RUN_MODALITIES = ["treadmill", "outdoor"];
+const RUN_GRAPH_MAX = 24;
+// Treadmill and outdoor are both miles, so they share one picture. Pool is
+// yards and belongs nowhere near this scale.
+function runSeries(sessions) {
+    const out = [];
+    sessions.forEach((s, i) => {
+        const modality = s.modality || "treadmill";
+        if (!RUN_MODALITIES.includes(modality))
+            return;
+        if (!s.distance || !s.duration)
+            return;
+        out.push({
+            index: i,
+            date: s.date,
+            modality,
+            distance: s.distance,
+            pace: cardioPace(s),
+            short: !!s.timeConstrained,
+        });
+    });
+    return out.slice(-RUN_GRAPH_MAX);
+}
+function paceLabel(p) {
+    if (!isFinite(p) || p <= 0)
+        return "—";
+    let m = Math.floor(p);
+    let sec = Math.round((p - m) * 60);
+    if (sec === 60) {
+        m += 1;
+        sec = 0;
+    }
+    return `${m}:${String(sec).padStart(2, "0")}`;
+}
+function RunGraph({ sessions }) {
+    const runs = (0, react_1.useMemo)(() => runSeries(sessions), [sessions]);
+    // The target going into each run, replayed through the same function the coach
+    // calls, so the line drawn here can never disagree with the plan on screen.
+    // The extra value on the end is today's target, which is what the trailing
+    // segment past the last dot is showing.
+    const targets = (0, react_1.useMemo)(() => {
+        if (runs.length === 0)
+            return [];
+        const past = runs.map((r) => suggestCardioTarget(sessions.slice(0, r.index), r.modality).distance);
+        past.push(suggestCardioTarget(sessions, runs[runs.length - 1].modality).distance);
+        return past;
+    }, [runs, sessions]);
+    if (runs.length === 0)
+        return null;
+    // Two bands, not one plot. Pace lives on an inverted scale, and when it was
+    // drawn over the distance dots it read as a trend line through them, which is
+    // a different claim entirely. Separated by a hairline, each scale means only
+    // what it says.
+    const width = 340, height = 120;
+    const dTop = 10, dBot = 80; // distance + target
+    const rule = 86;
+    const pTop = 94, pBot = 112; // pace ribbon
+    const n = runs.length;
+    // One slot per run plus a trailing slot for today's target. Dots sit centred
+    // in their slot so each lands on the target segment it was run against.
+    const stepX = width / (n + 1);
+    const xRun = (i) => +((i + 0.5) * stepX).toFixed(1);
+    const dVals = runs.map((r) => r.distance).concat(targets);
+    const dMin = Math.min(...dVals), dMax = Math.max(...dVals);
+    const dPad = (dMax - dMin) * 0.15 || 0.1;
+    const dLo = dMin - dPad, dHi = dMax + dPad;
+    const yD = (v) => +(dBot - ((v - dLo) / (dHi - dLo || 1)) * (dBot - dTop)).toFixed(1);
+    const pVals = runs.map((r) => r.pace);
+    const pMin = Math.min(...pVals), pMax = Math.max(...pVals);
+    const pPad = (pMax - pMin) * 0.2 || 0.5;
+    const pLo = pMin - pPad, pHi = pMax + pPad;
+    // Inverted deliberately: a lower pace is a faster run, so it belongs higher.
+    const yP = (v) => +(pTop + ((v - pLo) / (pHi - pLo || 1)) * (pBot - pTop)).toFixed(1);
+    let targetPath = `M 0 ${yD(targets[0])}`;
+    for (let i = 1; i <= n; i++) {
+        const x = +(i * stepX).toFixed(1);
+        targetPath += ` L ${x} ${yD(targets[i - 1])} L ${x} ${yD(targets[i])}`;
+    }
+    targetPath += ` L ${width} ${yD(targets[n])}`;
+    const pacePath = runs.map((r, i) => `${i === 0 ? "M" : "L"} ${xRun(i)} ${yP(r.pace)}`).join(" ");
+    const dotR = n > 16 ? 2.8 : 3.5;
+    const last = runs[n - 1];
+    const anyShort = runs.some((r) => r.short);
+    return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "18px 20px" } },
+        react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 } },
+            react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#1B1B1B" } }, "Running"),
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: "var(--activity)", fontWeight: 600 } },
+                last.distance,
+                "mi")),
+        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759", marginBottom: 8 } },
+            "Target ",
+            targets[n],
+            "mi \u00B7 last ",
+            paceLabel(last.pace),
+            "/mi"),
+        react_1.default.createElement("svg", { width: "100%", height: height, viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: "none", style: { display: "block" } },
+            react_1.default.createElement("path", { d: targetPath, fill: "none", stroke: "var(--activity)", strokeWidth: "2.5", strokeLinejoin: "round" }),
+            runs.map((r, i) => (react_1.default.createElement("circle", { key: i, cx: xRun(i), cy: yD(r.distance), r: r.short ? dotR - 0.7 : dotR, fill: r.short ? "#F9F6EE" : "#1B1B1B", stroke: r.short ? "#A9A192" : "#1B1B1B", strokeWidth: "1.5" }))),
+            react_1.default.createElement("line", { x1: "0", y1: rule, x2: width, y2: rule, stroke: "#D8D0BF", strokeWidth: "1" }),
+            react_1.default.createElement("path", { d: pacePath, fill: "none", stroke: "#8C8375", strokeWidth: "1.5", strokeDasharray: "3 2.5", strokeLinejoin: "round" })),
+        react_1.default.createElement("div", { style: { display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", color: "#6E6759" } },
+            react_1.default.createElement("span", { style: { color: "#1B1B1B" } }, "\u25CF run"),
+            anyShort && react_1.default.createElement("span", { style: { color: "#A9A192" } }, "\u25CB short on time"),
+            react_1.default.createElement("span", { style: { color: "var(--activity)" } }, "\u25AC target"),
+            react_1.default.createElement("span", null, "\u2504 pace \u00B7 faster up"))));
+}
 // ---------- practice (daily meditation + journal) ----------
 // ---------- how the mind was (non-ranked) ----------
 // Replaces the old restless -> absorbed scale, which ranked sits by depth of
@@ -20745,14 +20860,16 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#1B1B1B", lineHeight: 1.6 } }, stretchExpansion.reason),
             react_1.default.createElement("button", { onClick: () => addStretchFromLibrary(stretchExpansion.suggestion), style: { ...btnPrimary, background: "var(--activity)", color: "#F9F6EE", padding: "10px 16px", fontSize: 13, marginTop: 14 } }, "Add to routine"))),
         react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#1B1B1B", marginTop: 4 } }, "Progression"),
-        react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, Object.keys(exercises).filter(k => {
-            const cfg = exercises[k];
-            if (cfg.active === false)
-                return false;
-            if (!cfg.noWeight)
-                return true;
-            return sessions.some(s => s.exercises && s.exercises[k] && s.exercises[k].weight);
-        }).map((k) => (react_1.default.createElement(ProgressionLadder, { key: k, sessions: sessions, exKey: k, exercises: exercises })))),
+        react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
+            react_1.default.createElement(RunGraph, { sessions: sessions }),
+            Object.keys(exercises).filter(k => {
+                const cfg = exercises[k];
+                if (cfg.active === false)
+                    return false;
+                if (!cfg.noWeight)
+                    return true;
+                return sessions.some(s => s.exercises && s.exercises[k] && s.exercises[k].weight);
+            }).map((k) => (react_1.default.createElement(ProgressionLadder, { key: k, sessions: sessions, exKey: k, exercises: exercises })))),
         react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#1B1B1B", marginTop: 4 } }, "Queued"),
         react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, plan.queue.filter(q => !sessions.some(s => s.exercises && s.exercises[q.key])).map((q, i) => (react_1.default.createElement("div", { key: i, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "12px 16px" } },
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13, color: "#1B1B1B" } }, exercises[q.key]?.label || q.key),
