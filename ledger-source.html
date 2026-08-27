@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: RunGraph joins the Progression wall on Today, above the lift ladders. It merges treadmill and outdoor runs (both miles; pool is yards and stays out) into one picture capped at RUN_GRAPH_MAX (24) runs. Distance is plotted as dots rather than a step line, because run distance moves every session and the ladder&#x27;s step-after drawing would be a jagged line wearing a staircase costume; what actually steps is the target, so the target gets the ember step line. Each target value is replayed through suggestCardioTarget on sessions.slice(0, run.index) for that run&#x27;s modality, so the line can never disagree with the plan the coach shows, and one extra value on the end carries today&#x27;s target as the trailing segment past the last dot. Runs flagged timeConstrained render as hollow muted dots — visible, but still excluded from the targeting maths as before. Pace sits in its own band below a hairline rule rather than over the dots, where it read as a trend line through them, and its scale is inverted so a faster run is higher up. Previously: the History tab is editable — each session card carries a pencil and an X; the pencil opens a SessionEditor holding a local draft (date, duration, distance, average and max heart rate, every logged lift&#x27;s weight, sets, reps and feel, plus notes) and writes once on Save, and handleSessionUpdate re-sorts sessions by date afterwards because every reader of history — the coach, the progression ladder, the A/B alternation — walks the array in order rather than sorting first. The teachings importer rewrites suttacentral.net links to its JSON text API with fallbacks and gates every import on TEACHING_MIN_CHARS (1000). suggestCardioTarget runs on a six-run window (CARDIO_WINDOW), anchoring distance on the best run in the window and splitting the window in half to read pace and heart-rate direction. Session type “R” (run-only) skips movement prep and lifting and stays out of the A/B alternation. Stretches are capped at STRETCH_SESSION_CAP (5). hipThrust uses the loaded bench version via loadFloor (25lb), reaching stored configs through migrateExercises.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: RunGraph joins the Progression wall on Today, above the lift ladders, plotting every run ever logged with no cap — dot radius scales with spacing so density degrades instead of history being dropped. Distance is drawn as dots rather than a step line, because run distance moves every session and the ladder&#x27;s step-after path would be a jagged line wearing a staircase costume; what actually steps is the target, so the target gets the ember step line. Each target value is replayed through suggestCardioTarget on sessions.slice(0, run.index), so the line can never disagree with the plan the coach shows, and one extra value on the end carries today&#x27;s target as the trailing segment past the last dot. timeConstrained runs render as hollow muted dots, visible but still outside the targeting maths. Pace sits in its own band below a hairline rule rather than over the dots, where it read as a trend line through them; its scale is inverted so a faster run is higher. cardioGroup() now folds treadmill and outdoor into one running group (pool stays separate on yards), and suggestCardioTarget reads surfaceHistory when a surface has two or more runs and falls back to the whole running group when it doesn&#x27;t — so a first outdoor run no longer gets told to build a 1.5mi baseline while treadmill runs sit at 1.9mi, and a 3.1mi outdoor run never sets the treadmill target, which would land a 49-minute run in a 30-minute gym slot. Previously: the History tab is editable — each session card carries a pencil and an X; the pencil opens a SessionEditor holding a local draft (date, duration, distance, average and max heart rate, every logged lift&#x27;s weight, sets, reps and feel, plus notes) and writes once on Save, and handleSessionUpdate re-sorts sessions by date afterwards because every reader of history — the coach, the progression ladder, the A/B alternation — walks the array in order rather than sorting first. The teachings importer rewrites suttacentral.net links to its JSON text API with fallbacks and gates every import on TEACHING_MIN_CHARS (1000). suggestCardioTarget runs on a six-run window (CARDIO_WINDOW), anchoring distance on the best run in the window and splitting the window in half to read pace and heart-rate direction. Session type “R” (run-only) skips movement prep and lifting and stays out of the A/B alternation. Stretches are capped at STRETCH_SESSION_CAP (5). hipThrust uses the loaded bench version via loadFloor (25lb), reaching stored configs through migrateExercises.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -1575,12 +1575,31 @@ function cardioMean(xs) {
   return xs.length ? xs.reduce((a, b) =&gt; a + b, 0) / xs.length : null;
 }
 
+// Treadmill and outdoor are one running target, not two. They&#x27;re the same
+// stimulus in the same units, and keeping separate windows meant a first
+// outdoor run read as a brand new modality and got told to build a 1.5mi
+// baseline while treadmill runs were already at 1.9mi. Pool is yards and
+// stays its own pool.
+function cardioGroup(modality) {
+  return (modality || &quot;treadmill&quot;) === &quot;pool&quot; ? &quot;pool&quot; : &quot;run&quot;;
+}
+
 function suggestCardioTarget(sessions, modality = &quot;treadmill&quot;) {
   // Only compare like with like — pool yardage and running miles aren&#x27;t the
   // same units, and pace between them means nothing.
-  const history = sessions
-    .filter((s) =&gt; s.distance &amp;&amp; s.duration &amp;&amp; (s.modality || &quot;treadmill&quot;) === modality &amp;&amp; !s.timeConstrained)
-    .slice(-CARDIO_WINDOW);
+  const group = cardioGroup(modality);
+  const groupHistory = sessions
+    .filter((s) =&gt; s.distance &amp;&amp; s.duration &amp;&amp; cardioGroup(s.modality) === group &amp;&amp; !s.timeConstrained);
+  const surfaceHistory = groupHistory.filter((s) =&gt; (s.modality || &quot;treadmill&quot;) === modality);
+  // Compare like with like where there is enough of it, but never start a new
+  // surface from a cold baseline. Treadmill runs sit inside a gym session and
+  // outdoor runs don&#x27;t, so their distances aren&#x27;t interchangeable even though
+  // they&#x27;re the same sport — a 3.1mi outdoor run must never set the treadmill&#x27;s
+  // distance, or it lands a 49-minute run in a 30-minute slot. Below two runs on
+  // a surface there&#x27;s nothing to read, and the rest of your running is a far
+  // better starting point than telling someone already at 1.9mi to build a
+  // 1.5mi baseline.
+  const history = (surfaceHistory.length &gt;= 2 ? surfaceHistory : groupHistory).slice(-CARDIO_WINDOW);
   if (modality === &quot;pool&quot; &amp;&amp; history.length &lt; 2) {
     return { distance: 500, duration: 25, rationale: &quot;New modality — swim easy and find a baseline. Distance in yards.&quot; };
   }
@@ -2344,16 +2363,13 @@ function Sparkline({ data, width = 300, height = 60, color = &quot;var(--activit
 // around it. Pace rides underneath on its own scale, inverted so that a faster
 // run reads as higher up, which is the only way it can sit next to a rising
 // target line without looking like the two disagree.
-const RUN_MODALITIES = [&quot;treadmill&quot;, &quot;outdoor&quot;];
-const RUN_GRAPH_MAX = 24;
-
-// Treadmill and outdoor are both miles, so they share one picture. Pool is
-// yards and belongs nowhere near this scale.
+// Every run ever logged is plotted. No cap: the whole history is the point,
+// and the dots shrink to make room rather than the oldest ones being dropped.
 function runSeries(sessions) {
   const out = [];
   sessions.forEach((s, i) =&gt; {
     const modality = s.modality || &quot;treadmill&quot;;
-    if (!RUN_MODALITIES.includes(modality)) return;
+    if (cardioGroup(modality) !== &quot;run&quot;) return;
     if (!s.distance || !s.duration) return;
     out.push({
       index: i,
@@ -2364,7 +2380,7 @@ function runSeries(sessions) {
       short: !!s.timeConstrained,
     });
   });
-  return out.slice(-RUN_GRAPH_MAX);
+  return out;
 }
 
 function paceLabel(p) {
@@ -2426,7 +2442,7 @@ function RunGraph({ sessions }) {
   targetPath += ` L ${width} ${yD(targets[n])}`;
 
   const pacePath = runs.map((r, i) =&gt; `${i === 0 ? &quot;M&quot; : &quot;L&quot;} ${xRun(i)} ${yP(r.pace)}`).join(&quot; &quot;);
-  const dotR = n &gt; 16 ? 2.8 : 3.5;
+  const dotR = Math.max(1.6, Math.min(3.5, stepX * 0.32));
 
   const last = runs[n - 1];
   const anyShort = runs.some((r) =&gt; r.short);

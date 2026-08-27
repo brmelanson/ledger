@@ -18796,12 +18796,30 @@ function cardioPace(s) {
 function cardioMean(xs) {
     return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 }
+// Treadmill and outdoor are one running target, not two. They're the same
+// stimulus in the same units, and keeping separate windows meant a first
+// outdoor run read as a brand new modality and got told to build a 1.5mi
+// baseline while treadmill runs were already at 1.9mi. Pool is yards and
+// stays its own pool.
+function cardioGroup(modality) {
+    return (modality || "treadmill") === "pool" ? "pool" : "run";
+}
 function suggestCardioTarget(sessions, modality = "treadmill") {
     // Only compare like with like — pool yardage and running miles aren't the
     // same units, and pace between them means nothing.
-    const history = sessions
-        .filter((s) => s.distance && s.duration && (s.modality || "treadmill") === modality && !s.timeConstrained)
-        .slice(-CARDIO_WINDOW);
+    const group = cardioGroup(modality);
+    const groupHistory = sessions
+        .filter((s) => s.distance && s.duration && cardioGroup(s.modality) === group && !s.timeConstrained);
+    const surfaceHistory = groupHistory.filter((s) => (s.modality || "treadmill") === modality);
+    // Compare like with like where there is enough of it, but never start a new
+    // surface from a cold baseline. Treadmill runs sit inside a gym session and
+    // outdoor runs don't, so their distances aren't interchangeable even though
+    // they're the same sport — a 3.1mi outdoor run must never set the treadmill's
+    // distance, or it lands a 49-minute run in a 30-minute slot. Below two runs on
+    // a surface there's nothing to read, and the rest of your running is a far
+    // better starting point than telling someone already at 1.9mi to build a
+    // 1.5mi baseline.
+    const history = (surfaceHistory.length >= 2 ? surfaceHistory : groupHistory).slice(-CARDIO_WINDOW);
     if (modality === "pool" && history.length < 2) {
         return { distance: 500, duration: 25, rationale: "New modality — swim easy and find a baseline. Distance in yards." };
     }
@@ -19358,15 +19376,13 @@ function Sparkline({ data, width = 300, height = 60, color = "var(--activity)" }
 // around it. Pace rides underneath on its own scale, inverted so that a faster
 // run reads as higher up, which is the only way it can sit next to a rising
 // target line without looking like the two disagree.
-const RUN_MODALITIES = ["treadmill", "outdoor"];
-const RUN_GRAPH_MAX = 24;
-// Treadmill and outdoor are both miles, so they share one picture. Pool is
-// yards and belongs nowhere near this scale.
+// Every run ever logged is plotted. No cap: the whole history is the point,
+// and the dots shrink to make room rather than the oldest ones being dropped.
 function runSeries(sessions) {
     const out = [];
     sessions.forEach((s, i) => {
         const modality = s.modality || "treadmill";
-        if (!RUN_MODALITIES.includes(modality))
+        if (cardioGroup(modality) !== "run")
             return;
         if (!s.distance || !s.duration)
             return;
@@ -19379,7 +19395,7 @@ function runSeries(sessions) {
             short: !!s.timeConstrained,
         });
     });
-    return out.slice(-RUN_GRAPH_MAX);
+    return out;
 }
 function paceLabel(p) {
     if (!isFinite(p) || p <= 0)
@@ -19438,7 +19454,7 @@ function RunGraph({ sessions }) {
     }
     targetPath += ` L ${width} ${yD(targets[n])}`;
     const pacePath = runs.map((r, i) => `${i === 0 ? "M" : "L"} ${xRun(i)} ${yP(r.pace)}`).join(" ");
-    const dotR = n > 16 ? 2.8 : 3.5;
+    const dotR = Math.max(1.6, Math.min(3.5, stepX * 0.32));
     const last = runs[n - 1];
     const anyShort = runs.some((r) => r.short);
     return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "18px 20px" } },
