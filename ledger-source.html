@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: RunGraph joins the Progression wall on Today, above the lift ladders, plotting every run ever logged with no cap — dot radius scales with spacing so density degrades instead of history being dropped. Distance is drawn as dots rather than a step line, because run distance moves every session and the ladder&#x27;s step-after path would be a jagged line wearing a staircase costume; what actually steps is the target, so the target gets the ember step line. Each target value is replayed through suggestCardioTarget on sessions.slice(0, run.index), so the line can never disagree with the plan the coach shows, and one extra value on the end carries today&#x27;s target as the trailing segment past the last dot. timeConstrained runs render as hollow muted dots, visible but still outside the targeting maths. Pace sits in its own band below a hairline rule rather than over the dots, where it read as a trend line through them; its scale is inverted so a faster run is higher. cardioGroup() now folds treadmill and outdoor into one running group (pool stays separate on yards), and suggestCardioTarget reads surfaceHistory when a surface has two or more runs and falls back to the whole running group when it doesn&#x27;t — so a first outdoor run no longer gets told to build a 1.5mi baseline while treadmill runs sit at 1.9mi, and a 3.1mi outdoor run never sets the treadmill target, which would land a 49-minute run in a 30-minute gym slot. Previously: the History tab is editable — each session card carries a pencil and an X; the pencil opens a SessionEditor holding a local draft (date, duration, distance, average and max heart rate, every logged lift&#x27;s weight, sets, reps and feel, plus notes) and writes once on Save, and handleSessionUpdate re-sorts sessions by date afterwards because every reader of history — the coach, the progression ladder, the A/B alternation — walks the array in order rather than sorting first. The teachings importer rewrites suttacentral.net links to its JSON text API with fallbacks and gates every import on TEACHING_MIN_CHARS (1000). suggestCardioTarget runs on a six-run window (CARDIO_WINDOW), anchoring distance on the best run in the window and splitting the window in half to read pace and heart-rate direction. Session type “R” (run-only) skips movement prep and lifting and stays out of the A/B alternation. Stretches are capped at STRETCH_SESSION_CAP (5). hipThrust uses the loaded bench version via loadFloor (25lb), reaching stored configs through migrateExercises.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: suggestCardioTarget was rebuilt against the running-science literature. It no longer anchors on the best run in the window — that ratcheted, because one unusually good day raised the floor permanently and ordinary variation read as a new sustainable baseline. The anchor is now the median distance across the window, which shrugs off a single outlier in either direction. Distance no longer advances because pace improved; advancing volume and intensity together is the one combination endurance practice is unanimous about separating, so a faster pace over the same ground is now reported as banked fitness and the target holds. Progression comes instead from consistency: four or more runs in the window with the last three at or above the anchor earns a 5% step. The old 5% heart-rate-drift hold fired on a signal that moves with heat, sleep, caffeine and how hard the lifting was beforehand; a hold now requires pace and heart rate to agree — slower and higher together. Not yet done, and both need data the app doesn&#x27;t collect: weekly minutes as the primary progression axis rather than per-session distance, and session-RPE as the cross-surface load measure. RunGraph sits at the top of the Progression wall on Today, plotting every run ever logged with no cap — dot radius scales with spacing so density degrades instead of history being dropped. Distance is drawn as dots rather than a step line, because run distance moves every session and the ladder&#x27;s step-after path would be a jagged line wearing a staircase costume; what steps is the target, so the target gets the ember step line, replayed through suggestCardioTarget on sessions.slice(0, run.index) so it can never disagree with the plan the coach shows. timeConstrained runs render as hollow muted dots, visible but outside the targeting maths. Pace sits in its own band below a hairline rule, inverted so faster is higher. cardioGroup() folds treadmill and outdoor into one running group (pool stays separate on yards); a surface anchors on its own history at two or more runs and borrows from the whole running group below that, so a first outdoor run isn&#x27;t told to build a 1.5mi baseline and a long outdoor run never sets the treadmill target. Previously: the History tab is editable via SessionEditor, which holds a local draft and writes once on Save; handleSessionUpdate re-sorts sessions by date afterwards because every reader of history walks the array in order. The teachings importer rewrites suttacentral.net links to its JSON text API and gates imports on TEACHING_MIN_CHARS (1000). Session type “R” (run-only) skips movement prep and lifting and stays out of the A/B alternation. Stretches are capped at STRETCH_SESSION_CAP (5). hipThrust uses the loaded bench version via loadFloor (25lb) through migrateExercises.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -1611,8 +1611,16 @@ function suggestCardioTarget(sessions, modality = &quot;treadmill&quot;) {
   const round = (d) =&gt; (yards ? Math.round(d / 25) * 25 : Math.round(d * 100) / 100);
   const bump = yards ? 50 : 0.1;
 
-  // The anchor is the best distance in the window, not the most recent one.
-  const best = history.reduce((b, s) =&gt; (s.distance &gt; b.distance ? s : b), history[0]);
+  // Anchor on the middle of the recent block, not the peak. Anchoring on the
+  // best run ratchets: one unusually good day raises the floor permanently,
+  // ordinary variation gets read as a new sustainable baseline, and the target
+  // can only ever climb. Every training-load framework that has survived
+  // scrutiny references a rolling average or median rather than a maximum, and
+  // the median in particular shrugs off a single outlier in either direction.
+  const sorted = history.map((s) =&gt; s.distance).sort((a, b) =&gt; a - b);
+  const anchor = sorted.length % 2
+    ? sorted[(sorted.length - 1) / 2]
+    : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
 
   // Split the window in half and compare the halves. A single run is noise;
   // the direction across several is the thing worth responding to.
@@ -1625,28 +1633,44 @@ function suggestCardioTarget(sessions, modality = &quot;treadmill&quot;) {
   const olderHr = hrOf(older);
   const newerHr = hrOf(newer);
 
-  // Plan the target duration at the recent sustainable pace rather than the
-  // pace of the best run — a one-off fast day shouldn&#x27;t set the clock.
+  // Plan the clock at the recent sustainable pace rather than the pace of the
+  // best run — a one-off fast day shouldn&#x27;t set the duration.
   const pace = newerPace;
   const n = history.length;
-  const hrDrift = olderHr &amp;&amp; newerHr ? newerHr &gt; olderHr * 1.05 : false;
-  const paceBetter = olderPace ? newerPace &lt; olderPace * 0.98 : false;
-  const paceWorse = olderPace ? newerPace &gt; olderPace * 1.05 : false;
 
-  if (hrDrift) {
-    const distance = round(best.distance);
-    return { distance, duration: Math.round(distance * pace), rationale: `Heart rate has drifted up across your last ${n} runs at much the same distances — holding at your best recent ${best.distance}${unit} so conditioning catches up before adding to it.` };
+  // One noisy signal isn&#x27;t a reason to hold back. Average heart rate between
+  // sessions moves with heat, sleep, caffeine, and how hard the lifting was
+  // beforehand, and a 5% shift across three runs sits inside ordinary
+  // variation. Requiring pace and heart rate to tell the same story — slower
+  // and higher together — is far harder to trip by accident.
+  const hrUp = olderHr &amp;&amp; newerHr ? newerHr &gt; olderHr * 1.05 : false;
+  const paceSlower = olderPace ? newerPace &gt; olderPace * 1.05 : false;
+  const paceFaster = olderPace ? newerPace &lt; olderPace * 0.98 : false;
+  const labouring = hrUp &amp;&amp; paceSlower;
+
+  // Advance on consistency, not on a good day, and never because pace improved.
+  // Moving distance up on the back of a pace gain advances volume and intensity
+  // at the same time, which is the one combination endurance practice is
+  // unanimous about separating. A faster pace over the same ground is fitness
+  // banked — it isn&#x27;t permission to go further as well.
+  const recent = history.slice(-3);
+  const holdingTheLine = recent.length &gt;= 3 &amp;&amp; recent.every((s) =&gt; s.distance &gt;= anchor);
+  const readyToStep = history.length &gt;= 4 &amp;&amp; holdingTheLine &amp;&amp; !labouring;
+
+  const anchorLabel = round(anchor);
+  if (labouring) {
+    const distance = round(anchor);
+    return { distance, duration: Math.round(distance * pace), rationale: `Pace has slipped and heart rate has climbed together across your last ${n} runs — that pairing is worth listening to. Holding at ${anchorLabel}${unit} until it settles.` };
   }
-  if (paceBetter) {
-    const distance = round(best.distance + bump);
-    return { distance, duration: Math.round(distance * pace), rationale: `Pace is trending faster across your last ${n} runs with heart rate steady — stepping up from your best recent ${best.distance}${unit} to ${distance}${unit}.` };
+  if (readyToStep) {
+    const distance = round(anchor * 1.05);
+    return { distance, duration: Math.round(distance * pace), rationale: `Your last three runs all met or beat your recent ${anchorLabel}${unit} — a small step up to ${distance}${unit}.` };
   }
-  if (paceWorse) {
-    const distance = round(best.distance);
-    return { distance, duration: Math.round(distance * pace), rationale: `Pace has drifted slower over your last ${n} runs. Target stays at your best recent ${best.distance}${unit} — run it at whatever pace feels sustainable rather than chasing the clock.` };
-  }
-  const distance = round(best.distance);
-  return { distance, duration: Math.round(distance * pace), rationale: `Steady across your last ${n} runs — matching your best recent ${best.distance}${unit}.` };
+  const distance = round(anchor);
+  const note = paceFaster
+    ? ` Pace is trending faster, which is worth banking rather than spending — same distance, less effort.`
+    : ``;
+  return { distance, duration: Math.round(distance * pace), rationale: `Settling in around your recent ${anchorLabel}${unit} across your last ${n} runs.${note}` };
 }
 
 // Builds a plain-language weekly coaching summary tied to the user&#x27;s

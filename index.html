@@ -18830,8 +18830,16 @@ function suggestCardioTarget(sessions, modality = "treadmill") {
     const unit = yards ? "yd" : "mi";
     const round = (d) => (yards ? Math.round(d / 25) * 25 : Math.round(d * 100) / 100);
     const bump = yards ? 50 : 0.1;
-    // The anchor is the best distance in the window, not the most recent one.
-    const best = history.reduce((b, s) => (s.distance > b.distance ? s : b), history[0]);
+    // Anchor on the middle of the recent block, not the peak. Anchoring on the
+    // best run ratchets: one unusually good day raises the floor permanently,
+    // ordinary variation gets read as a new sustainable baseline, and the target
+    // can only ever climb. Every training-load framework that has survived
+    // scrutiny references a rolling average or median rather than a maximum, and
+    // the median in particular shrugs off a single outlier in either direction.
+    const sorted = history.map((s) => s.distance).sort((a, b) => a - b);
+    const anchor = sorted.length % 2
+        ? sorted[(sorted.length - 1) / 2]
+        : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
     // Split the window in half and compare the halves. A single run is noise;
     // the direction across several is the thing worth responding to.
     const half = Math.ceil(history.length / 2);
@@ -18842,27 +18850,41 @@ function suggestCardioTarget(sessions, modality = "treadmill") {
     const hrOf = (arr) => cardioMean(arr.map((s) => s.hrAvg).filter(Boolean));
     const olderHr = hrOf(older);
     const newerHr = hrOf(newer);
-    // Plan the target duration at the recent sustainable pace rather than the
-    // pace of the best run — a one-off fast day shouldn't set the clock.
+    // Plan the clock at the recent sustainable pace rather than the pace of the
+    // best run — a one-off fast day shouldn't set the duration.
     const pace = newerPace;
     const n = history.length;
-    const hrDrift = olderHr && newerHr ? newerHr > olderHr * 1.05 : false;
-    const paceBetter = olderPace ? newerPace < olderPace * 0.98 : false;
-    const paceWorse = olderPace ? newerPace > olderPace * 1.05 : false;
-    if (hrDrift) {
-        const distance = round(best.distance);
-        return { distance, duration: Math.round(distance * pace), rationale: `Heart rate has drifted up across your last ${n} runs at much the same distances — holding at your best recent ${best.distance}${unit} so conditioning catches up before adding to it.` };
+    // One noisy signal isn't a reason to hold back. Average heart rate between
+    // sessions moves with heat, sleep, caffeine, and how hard the lifting was
+    // beforehand, and a 5% shift across three runs sits inside ordinary
+    // variation. Requiring pace and heart rate to tell the same story — slower
+    // and higher together — is far harder to trip by accident.
+    const hrUp = olderHr && newerHr ? newerHr > olderHr * 1.05 : false;
+    const paceSlower = olderPace ? newerPace > olderPace * 1.05 : false;
+    const paceFaster = olderPace ? newerPace < olderPace * 0.98 : false;
+    const labouring = hrUp && paceSlower;
+    // Advance on consistency, not on a good day, and never because pace improved.
+    // Moving distance up on the back of a pace gain advances volume and intensity
+    // at the same time, which is the one combination endurance practice is
+    // unanimous about separating. A faster pace over the same ground is fitness
+    // banked — it isn't permission to go further as well.
+    const recent = history.slice(-3);
+    const holdingTheLine = recent.length >= 3 && recent.every((s) => s.distance >= anchor);
+    const readyToStep = history.length >= 4 && holdingTheLine && !labouring;
+    const anchorLabel = round(anchor);
+    if (labouring) {
+        const distance = round(anchor);
+        return { distance, duration: Math.round(distance * pace), rationale: `Pace has slipped and heart rate has climbed together across your last ${n} runs — that pairing is worth listening to. Holding at ${anchorLabel}${unit} until it settles.` };
     }
-    if (paceBetter) {
-        const distance = round(best.distance + bump);
-        return { distance, duration: Math.round(distance * pace), rationale: `Pace is trending faster across your last ${n} runs with heart rate steady — stepping up from your best recent ${best.distance}${unit} to ${distance}${unit}.` };
+    if (readyToStep) {
+        const distance = round(anchor * 1.05);
+        return { distance, duration: Math.round(distance * pace), rationale: `Your last three runs all met or beat your recent ${anchorLabel}${unit} — a small step up to ${distance}${unit}.` };
     }
-    if (paceWorse) {
-        const distance = round(best.distance);
-        return { distance, duration: Math.round(distance * pace), rationale: `Pace has drifted slower over your last ${n} runs. Target stays at your best recent ${best.distance}${unit} — run it at whatever pace feels sustainable rather than chasing the clock.` };
-    }
-    const distance = round(best.distance);
-    return { distance, duration: Math.round(distance * pace), rationale: `Steady across your last ${n} runs — matching your best recent ${best.distance}${unit}.` };
+    const distance = round(anchor);
+    const note = paceFaster
+        ? ` Pace is trending faster, which is worth banking rather than spending — same distance, less effort.`
+        : ``;
+    return { distance, duration: Math.round(distance * pace), rationale: `Settling in around your recent ${anchorLabel}${unit} across your last ${n} runs.${note}` };
 }
 // Builds a plain-language weekly coaching summary tied to the user's
 // stated goals, pulling together cardio targets, per-exercise directives,
