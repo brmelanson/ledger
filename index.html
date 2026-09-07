@@ -17625,7 +17625,7 @@ function effectiveType(s, exercises) {
     const keys = Object.keys(s.exercises || {});
     if (keys.length === 0)
         return s.type;
-    const types = keys.map((k) => exercises[k]?.sessionType).filter(Boolean);
+    const types = keys.map((k) => { var _a; return (_a = exercises[k]) === null || _a === void 0 ? void 0 : _a.sessionType; }).filter(Boolean);
     const aCount = types.filter((t) => t === "A").length;
     const bCount = types.filter((t) => t === "B").length;
     if (aCount > bCount)
@@ -17772,6 +17772,7 @@ function mergeRecipes(stored) {
         return DEFAULT_RECIPES;
     const byKey = new Map(stored.map((r) => [r.key, r]));
     const merged = DEFAULT_RECIPES.map((base) => {
+        var _a, _b;
         const u = byKey.get(base.key);
         if (!u)
             return base;
@@ -17783,8 +17784,8 @@ function mergeRecipes(stored) {
         return {
             ...base,
             outcome: (u.outcome || "").trim() ? u.outcome : base.outcome,
-            lastMade: u.lastMade ?? null,
-            verdict: u.verdict ?? null,
+            lastMade: (_a = u.lastMade) !== null && _a !== void 0 ? _a : null,
+            verdict: (_b = u.verdict) !== null && _b !== void 0 ? _b : null,
             verdictNote: u.verdictNote || "",
             cuisine: u.cuisine || base.cuisine || "",
             // Edits and provenance are pure cook-authored data with no app-authored
@@ -18078,6 +18079,7 @@ function assessChamberReadiness(sessions) {
 // "skipped") with no round count. Normalize both shapes to a round number so
 // history stays usable and progression can reason over all of it.
 function normalizeStretchRounds(value, cfg) {
+    var _a, _b;
     if (value == null)
         return null;
     if (typeof value === "number")
@@ -18087,9 +18089,9 @@ function normalizeStretchRounds(value, cfg) {
     if (value === "skipped")
         return 0;
     if (value === "shortened")
-        return Math.max(1, (cfg?.baseRounds ?? 1) - 1);
+        return Math.max(1, ((_a = cfg === null || cfg === void 0 ? void 0 : cfg.baseRounds) !== null && _a !== void 0 ? _a : 1) - 1);
     if (value === "full")
-        return cfg?.baseRounds ?? 1;
+        return (_b = cfg === null || cfg === void 0 ? void 0 : cfg.baseRounds) !== null && _b !== void 0 ? _b : 1;
     return null;
 }
 function stretchAccum(cfg, rounds) {
@@ -18561,6 +18563,7 @@ function coveredPatterns(exercises) {
 // weight has gone up since it started, or it's been rated solid/easy for
 // several sessions. That's the signal there's room to take on something new.
 function isEstablished(sessions, key) {
+    var _a, _b, _c, _d;
     const history = sessions
         .filter((s) => s.exercises && s.exercises[key])
         .map((s) => s.exercises[key]);
@@ -18571,8 +18574,8 @@ function isEstablished(sessions, key) {
         return false;
     const first = history[0];
     const last = history[history.length - 1];
-    const weightUp = (last.weight ?? 0) > (first.weight ?? 0);
-    const repsUp = (last.reps ?? 0) > (first.reps ?? 0);
+    const weightUp = ((_a = last.weight) !== null && _a !== void 0 ? _a : 0) > ((_b = first.weight) !== null && _b !== void 0 ? _b : 0);
+    const repsUp = ((_c = last.reps) !== null && _c !== void 0 ? _c : 0) > ((_d = first.reps) !== null && _d !== void 0 ? _d : 0);
     const steadySolid = recent.every((h) => h.feel === "easy" || h.feel === "solid");
     return weightUp || repsUp || steadySolid;
 }
@@ -18598,6 +18601,7 @@ function sessionsSinceLastAddition(sessions, exercises) {
     return fewest;
 }
 function suggestExerciseExpansion(sessions, exercises, allStretches = STRETCHES, sessionType = "A", budgetMinutes = 120, cardioMinutes = 30) {
+    var _a, _b;
     const withEx = sessions.filter((s) => s.exercises && Object.keys(s.exercises).length > 0);
     if (withEx.length < 4) {
         return { ready: false, reason: `Log ${4 - withEx.length} more session${4 - withEx.length === 1 ? "" : "s"} before adding new movements — the app needs a baseline first.` };
@@ -18627,7 +18631,7 @@ function suggestExerciseExpansion(sessions, exercises, allStretches = STRETCHES,
         };
     }
     if (next.prereq && !isEstablished(sessions, next.prereq)) {
-        const prereqLabel = exercises[next.prereq]?.label || EXERCISE_LIBRARY.find((e) => e.key === next.prereq)?.label || next.prereq;
+        const prereqLabel = ((_a = exercises[next.prereq]) === null || _a === void 0 ? void 0 : _a.label) || ((_b = EXERCISE_LIBRARY.find((e) => e.key === next.prereq)) === null || _b === void 0 ? void 0 : _b.label) || next.prereq;
         return {
             ready: false,
             reason: `${next.label} is the next gap to fill, but ${prereqLabel} should be progressing steadily first. Build that up and this will unlock.`,
@@ -18678,6 +18682,7 @@ function suggestStretchExpansion(sessions, activeStretches) {
 // range before adding weight, back off cleanly after a struggle, and
 // flag exercises that have stalled so they don't just sit unchanged forever.
 function getExerciseRecommendation(sessions, key, exercises) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const cfg = exercises[key];
     if (!cfg)
         return null;
@@ -18697,18 +18702,18 @@ function getExerciseRecommendation(sessions, key, exercises) {
         const secondLast = history[history.length - 2];
         const repCap = cfg.targetReps + 3;
         if (last.feel === "struggled" || last.feel === "shaky") {
-            return { weight: null, sets: cfg.targetSets, reps: Math.max(cfg.targetReps, (last.reps ?? cfg.targetReps) - 1), action: "hold", rationale: "Last rep felt unstable — holding here to groove the pattern before adding reps." };
+            return { weight: null, sets: cfg.targetSets, reps: Math.max(cfg.targetReps, ((_a = last.reps) !== null && _a !== void 0 ? _a : cfg.targetReps) - 1), action: "hold", rationale: "Last rep felt unstable — holding here to groove the pattern before adding reps." };
         }
         if ((last.feel === "easy" || last.feel === "solid") && secondLast && (secondLast.feel === "easy" || secondLast.feel === "solid")) {
-            const atCap = (last.reps ?? cfg.targetReps) >= repCap;
+            const atCap = ((_b = last.reps) !== null && _b !== void 0 ? _b : cfg.targetReps) >= repCap;
             if (atCap) {
-                const startWeight = cfg.kettlebellStart ?? 15;
+                const startWeight = (_c = cfg.kettlebellStart) !== null && _c !== void 0 ? _c : 15;
                 return { weight: startWeight, sets: cfg.targetSets, reps: cfg.targetReps, action: "weight-ready", rationale: `Reps solid at the top of this progression for two sessions in a row — time to add a kettlebell. Starting at ${startWeight}${cfg.unit} and dropping back to ${cfg.targetReps} reps per side, since the load is what's new now.` };
             }
-            const reps = Math.min(repCap, (last.reps ?? cfg.targetReps) + 1);
+            const reps = Math.min(repCap, ((_d = last.reps) !== null && _d !== void 0 ? _d : cfg.targetReps) + 1);
             return { weight: null, sets: cfg.targetSets, reps, action: "reps-up", rationale: `Two clean sessions — adding a rep per side (${reps}).` };
         }
-        return { weight: null, sets: cfg.targetSets, reps: last.reps ?? cfg.targetReps, action: "hold", rationale: "Steady — repeat this rep count." };
+        return { weight: null, sets: cfg.targetSets, reps: (_e = last.reps) !== null && _e !== void 0 ? _e : cfg.targetReps, action: "hold", rationale: "Steady — repeat this rep count." };
     }
     const effectiveStep = cfg.step || 5;
     const repLow = cfg.targetReps;
@@ -18718,13 +18723,13 @@ function getExerciseRecommendation(sessions, key, exercises) {
     }
     const last = history[history.length - 1];
     const secondLast = history[history.length - 2];
-    const lastReps = last.reps ?? repLow;
+    const lastReps = (_f = last.reps) !== null && _f !== void 0 ? _f : repLow;
     // Some movements do nothing at all below a certain load — an unloaded hip
     // thrust is the clearest case, where three sets of twelve is a warm-up rather
     // than a working set. loadFloor is that threshold. Laddering reps up from zero
     // would take months to arrive somewhere the exercise should have started, so
     // the engine steps straight to the floor once the movement is being tolerated.
-    if (cfg.loadFloor && (last.weight ?? 0) < cfg.loadFloor && last.feel !== "struggled") {
+    if (cfg.loadFloor && ((_g = last.weight) !== null && _g !== void 0 ? _g : 0) < cfg.loadFloor && last.feel !== "struggled") {
         return {
             weight: cfg.loadFloor, sets: cfg.targetSets, reps: repLow, action: "load-floor",
             rationale: `Bodyweight on the floor sits under the load this movement needs to train anything — moving to the bench version at ${cfg.loadFloor}${cfg.unit} and resetting to ${repLow} reps. Expect it to feel like real work now.`,
@@ -18732,7 +18737,7 @@ function getExerciseRecommendation(sessions, key, exercises) {
     }
     if (last.feel === "struggled") {
         const priorStable = [...history].reverse().find((h) => h.feel === "solid" || h.feel === "easy");
-        const weight = priorStable ? priorStable.weight : Math.max(0, (last.weight ?? effectiveStep) - effectiveStep);
+        const weight = priorStable ? priorStable.weight : Math.max(0, ((_h = last.weight) !== null && _h !== void 0 ? _h : effectiveStep) - effectiveStep);
         return { weight, sets: cfg.targetSets, reps: repLow, action: "deload", rationale: `Backed off to ${weight}${cfg.unit} and reset reps to ${repLow} after a tough session — rebuild from a stable base.` };
     }
     if (last.feel === "easy") {
@@ -18761,6 +18766,7 @@ function suggestNextWeight(sessions, key, exercises) {
 // across the last several logged sessions despite mixed/struggled results —
 // a sign that more of the same isn't working and something should change.
 function checkPlateau(sessions, key, exercises) {
+    var _a;
     const cfg = exercises[key];
     if (!cfg)
         return null;
@@ -18774,10 +18780,10 @@ function checkPlateau(sessions, key, exercises) {
         return null;
     const recent = history.slice(-4);
     const sameWeight = recent.every((h) => h.weight === recent[0].weight);
-    const sameReps = recent.every((h) => (h.reps ?? cfg.targetReps) === (recent[0].reps ?? cfg.targetReps));
+    const sameReps = recent.every((h) => { var _a, _b; return ((_a = h.reps) !== null && _a !== void 0 ? _a : cfg.targetReps) === ((_b = recent[0].reps) !== null && _b !== void 0 ? _b : cfg.targetReps); });
     const anyStruggle = recent.some((h) => h.feel === "struggled");
     if (sameWeight && sameReps && anyStruggle) {
-        return `${cfg.label} has sat at ${recent[0].weight}${cfg.unit} × ${recent[0].reps ?? cfg.targetReps} for 4 sessions with at least one struggle — consider a deload session at 80% for one week, or swapping in a different movement for 2 weeks before returning to it.`;
+        return `${cfg.label} has sat at ${recent[0].weight}${cfg.unit} × ${(_a = recent[0].reps) !== null && _a !== void 0 ? _a : cfg.targetReps} for 4 sessions with at least one struggle — consider a deload session at 80% for one week, or swapping in a different movement for 2 weeks before returning to it.`;
     }
     return null;
 }
@@ -19067,12 +19073,13 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
     const back = () => setStep((s) => Math.max(0, s - 1));
     const setExercise = (key, field, value) => {
         setEntry((e) => {
+            var _a, _b, _c;
             const cfg = exercises[key];
             const rec = getExerciseRecommendation(sessions, key, exercises);
             const existing = e.exercises[key] || {
-                weight: rec?.weight ?? 0,
-                sets: rec?.sets ?? cfg.targetSets,
-                reps: rec?.reps ?? cfg.targetReps,
+                weight: (_a = rec === null || rec === void 0 ? void 0 : rec.weight) !== null && _a !== void 0 ? _a : 0,
+                sets: (_b = rec === null || rec === void 0 ? void 0 : rec.sets) !== null && _b !== void 0 ? _b : cfg.targetSets,
+                reps: (_c = rec === null || rec === void 0 ? void 0 : rec.reps) !== null && _c !== void 0 ? _c : cfg.targetReps,
                 feel: null,
             };
             return {
@@ -19232,17 +19239,18 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                     "/",
                     entry.hrMax,
                     entry.timeConstrained ? " · short on time" : ""),
-                Object.entries(entry.exercises).map(([k, v]) => (react_1.default.createElement("div", { key: k },
-                    exercises[k]?.label || k,
-                    ": ",
-                    v.weight ?? 0,
-                    exercises[k]?.unit,
-                    " \u00D7 ",
-                    v.sets ?? 1,
-                    "\u00D7",
-                    v.reps,
-                    " \u2014 ",
-                    v.feel))),
+                Object.entries(entry.exercises).map(([k, v]) => {
+                    var _a, _b, _c, _d;
+                    return (react_1.default.createElement("div", { key: k },
+                        ((_a = exercises[k]) === null || _a === void 0 ? void 0 : _a.label) || k,
+                        ": ", (_b = v.weight) !== null && _b !== void 0 ? _b : 0, (_c = exercises[k]) === null || _c === void 0 ? void 0 :
+                        _c.unit,
+                        " \u00D7 ", (_d = v.sets) !== null && _d !== void 0 ? _d : 1,
+                        "\u00D7",
+                        v.reps,
+                        " \u2014 ",
+                        v.feel));
+                }),
                 BODYWEIGHT.filter((b) => ((entry.bodyweight || {})[b.key] || 0) > 0).map((b) => (react_1.default.createElement("div", { key: b.key },
                     b.label,
                     ": ",
@@ -19278,15 +19286,16 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                 react_1.default.createElement(ChevronRight, { size: 16 }))))));
 }
 function ExerciseStep({ exKey, sessions, exercises, entry, setExercise, onSkip }) {
+    var _a, _b, _c, _d, _e, _f, _g;
     const cfg = exercises[exKey];
     const rec = getExerciseRecommendation(sessions, exKey, exercises);
     const val = entry.exercises[exKey] || {
-        weight: rec?.weight ?? 0, sets: rec?.sets ?? cfg.targetSets, reps: rec?.reps ?? cfg.targetReps, feel: null,
+        weight: (_a = rec === null || rec === void 0 ? void 0 : rec.weight) !== null && _a !== void 0 ? _a : 0, sets: (_b = rec === null || rec === void 0 ? void 0 : rec.sets) !== null && _b !== void 0 ? _b : cfg.targetSets, reps: (_c = rec === null || rec === void 0 ? void 0 : rec.reps) !== null && _c !== void 0 ? _c : cfg.targetReps, feel: null,
     };
     const [showHowTo, setShowHowTo] = (0, react_1.useState)(false);
-    const showWeight = rec?.weight != null;
-    return (react_1.default.createElement(Card, { title: cfg.label, sub: showWeight ? `Planned: ${rec?.weight ?? "—"}${cfg.unit} × ${rec?.sets ?? cfg.targetSets}×${rec?.reps ?? cfg.targetReps}` : `Planned: ${rec?.reps ?? cfg.targetReps} reps / side` },
-        rec?.rationale && (react_1.default.createElement("div", { style: {
+    const showWeight = (rec === null || rec === void 0 ? void 0 : rec.weight) != null;
+    return (react_1.default.createElement(Card, { title: cfg.label, sub: showWeight ? `Planned: ${(_d = rec === null || rec === void 0 ? void 0 : rec.weight) !== null && _d !== void 0 ? _d : "—"}${cfg.unit} × ${(_e = rec === null || rec === void 0 ? void 0 : rec.sets) !== null && _e !== void 0 ? _e : cfg.targetSets}×${(_f = rec === null || rec === void 0 ? void 0 : rec.reps) !== null && _f !== void 0 ? _f : cfg.targetReps}` : `Planned: ${(_g = rec === null || rec === void 0 ? void 0 : rec.reps) !== null && _g !== void 0 ? _g : cfg.targetReps} reps / side` },
+        (rec === null || rec === void 0 ? void 0 : rec.rationale) && (react_1.default.createElement("div", { style: {
                 fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "var(--activity)", lineHeight: 1.6,
                 background: "var(--activity-tint)", border: "2px solid var(--activity)", borderRadius: 0, padding: "10px 14px", marginBottom: 4,
             } },
@@ -19355,7 +19364,7 @@ function ProgressionLadder({ sessions, exKey, exercises }) {
     const cfg = exercises[exKey];
     const data = sessions
         .filter((s) => s.exercises && s.exercises[exKey])
-        .map((s, i) => ({ session: i + 1, weight: s.exercises[exKey].weight ?? 0, feel: s.exercises[exKey].feel }));
+        .map((s, i) => { var _a; return ({ session: i + 1, weight: (_a = s.exercises[exKey].weight) !== null && _a !== void 0 ? _a : 0, feel: s.exercises[exKey].feel }); });
     if (data.length === 0)
         return null;
     return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "18px 20px" } },
@@ -19503,25 +19512,55 @@ function RunGraph({ sessions }) {
             react_1.default.createElement("span", null, "\u2504 pace \u00B7 faster up"))));
 }
 // ---------- practice (daily meditation + journal) ----------
-// ---------- how the mind was (non-ranked) ----------
-// Replaces the old restless -> absorbed scale, which ranked sits by depth of
-// absorption and so quietly made "absorbed" the goal. These two readings are
-// diagnostic instead of ordinal: there is no best answer to either. Energy is the
-// classical energy/concentration balance, which tells you which awakening factors
-// to lean on next time; attitude is the observing mind's own stance.
+// ---------- how the mind was: retained only for reading back ----------
+// These were two chip rows in the log — energy, and attitude of the observing
+// mind. They are no longer offered.
+//
+// Two reasons, and the first one is not what it looks like in the data.
+//
+// The stored answers look well spread — across the 24 sits that carried
+// readings, attitude came out allowing 33%, unclear 29%, wanting 25%, resisting
+// 12%. That spread is not evidence the field worked. Brian reports that the
+// honest answer was "unclear" far more often than he recorded it, and that
+// offering four named states made picking one feel required, so he worked
+// backwards from an opaque recollection to something more specific. The field
+// induced a more confident answer than he had.
+//
+// That is worse than a field nobody fills in. An empty field records nothing;
+// this one recorded something false and then looked informative, which is how
+// it would have survived any review based on its own output. GENERAL RULE, and
+// the reason this comment is long: a self-report field cannot be validated by
+// looking at what it collected. The distribution of answers to a leading
+// question tells you nothing about whether the question was answerable.
+//
+// The second reason is what the question is FOR. Sayadaw U Tejaniya's "what is
+// the attitude of the observing mind?" is asked during a sit, repeatedly, as a
+// way of re-orienting — the asking is itself the practice. Turned into a chip
+// picked once afterwards it becomes a summary score of thirty minutes in which
+// a great deal happened and changed.
+//
+// A free text box has neither problem: it implies no set of admissible answers,
+// so "hard to tell" can be written in it without reading as a non-answer, and
+// so can nothing at all.
+//
+// The key/short pairs stay because entries already logged carry these values
+// and must keep rendering exactly as they did. The descriptive labels the chips
+// showed are gone with the chips — nothing reads them, and they were app-written
+// prose about practice, which is the thing this redesign removed.
 const MIND_ENERGY = [
-    { key: "slack", short: "Slack", label: "Slack — dull, sinking, low energy" },
-    { key: "balanced", short: "Balanced", label: "Balanced — energy and steadiness met" },
-    { key: "agitated", short: "Agitated", label: "Agitated — restless, pushing, busy" },
+    { key: "slack", short: "Slack" },
+    { key: "balanced", short: "Balanced" },
+    { key: "agitated", short: "Agitated" },
 ];
 const MIND_ATTITUDE = [
-    { key: "allowing", short: "Allowing", label: "Allowing — letting it be as it was" },
-    { key: "wanting", short: "Wanting", label: "Wanting — after a state, a depth, a result" },
-    { key: "resisting", short: "Resisting", label: "Resisting — pushing something away" },
-    { key: "unclear", short: "Unclear", label: "Hard to tell" },
+    { key: "allowing", short: "Allowing" },
+    { key: "wanting", short: "Wanting" },
+    { key: "resisting", short: "Resisting" },
+    { key: "unclear", short: "Unclear" },
 ];
-// Entries logged before this change carry a `rating` from the old scale. They stay
-// exactly as they were and still render — nothing in the log is rewritten.
+// Entries older still carry a `rating` from the absorption scale that preceded
+// those. They stay exactly as they are and render through the same function —
+// nothing in storage is rewritten by any of this.
 function practiceReadout(p) {
     const parts = [];
     const t = MEDITATION_TYPES.find((x) => x.key === p.type);
@@ -19540,68 +19579,38 @@ function practiceReadout(p) {
     }
     return parts.join(" · ");
 }
-// Last few readings, side by side, shown while the current one is being chosen.
-// Deliberately just the readings: no counts, no majority, no "you've been
-// agitated lately". Two entries is enough for this to be worth looking at, and
-// it gets more informative on its own as the log fills, without ever needing to
-// claim a pattern.
-function RecentSits({ practice, limit = 5 }) {
-    const recent = (0, react_1.useMemo)(() => [...(practice || [])]
-        .filter((p) => p.energy || p.attitude)
-        .sort((a, b) => {
-        if (a.date !== b.date)
-            return (a.date || "") < (b.date || "") ? 1 : -1;
-        return (b.id || 0) - (a.id || 0);
-    })
-        .slice(0, limit), [practice, limit]);
-    if (recent.length === 0)
-        return null;
-    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const dayLabel = (ds) => {
-        if (!ds || ds.length < 10)
-            return "—";
-        const m = MONTHS[Number(ds.slice(5, 7)) - 1];
-        return m ? `${m} ${Number(ds.slice(8, 10))}` : "—";
-    };
-    const shortOf = (list, key) => {
-        const hit = list.find((x) => x.key === key);
-        return hit ? hit.short : "—";
-    };
-    return (react_1.default.createElement("div", { style: { border: "2px solid #D8D0BF", background: "#EFE9DC", padding: "10px 12px" } },
-        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 8 } }, recent.length === 1 ? "Last sit" : `Last ${recent.length} sits`),
-        react_1.default.createElement("div", { style: { display: "grid", gridTemplateColumns: `repeat(${recent.length}, 1fr)`, gap: 0 } }, recent.map((p, i) => (react_1.default.createElement("div", { key: p.id || i, style: {
-                paddingLeft: i === 0 ? 0 : 8,
-                borderLeft: i === 0 ? "none" : "1px solid #D8D0BF",
-            } },
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: "#6E6759", letterSpacing: 0.4, textTransform: "uppercase" } }, dayLabel(p.date)),
-            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, fontWeight: 600, color: "#1B1B1B", marginTop: 4, lineHeight: 1.3 } }, shortOf(MIND_ENERGY, p.energy)),
-            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: "#6E6759", marginTop: 1, lineHeight: 1.3 } }, shortOf(MIND_ATTITUDE, p.attitude)))))),
-        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 11.5, color: "#6E6759", lineHeight: 1.5, marginTop: 8 } }, "Context, not comparison \u2014 there's no better answer on either row.")));
+// The reflection frame. Terms only, fixed, never rotating. Naming the five
+// hindrances and the seven awakening factors is the tradition's own vocabulary
+// rather than prose this app composed, so it sits inside the direct-quotation
+// rule rather than around it. It replaces the two chip rows that used to stand
+// here \u2014 energy and attitude of the observing mind \u2014 which asked for one
+// reading to cover thirty minutes in which a great deal happens, and so were
+// answered "unclear" or "all of them" nearly every time. Worse, they were an
+// in-sit question borrowed from Sayadaw U Tejaniya, whose whole use is to be
+// asked repeatedly during practice as a way of re-orienting; turned into a
+// summary field afterwards it stopped being that and became a small score.
+// A list of names asks nothing and records nothing. It is there to be glanced
+// at on the days it is wanted and ignored on the days it is not.
+const HINDRANCES = ["Sensory desire", "Ill will", "Sloth \u0026 torpor", "Restlessness \u0026 worry", "Doubt"];
+const AWAKENING_FACTORS = ["Mindfulness", "Investigation", "Energy", "Rapture", "Tranquility", "Concentration", "Equanimity"];
+function ReflectionFrame() {
+    const row = (label, items, key) => (react_1.default.createElement("div", { key: key, style: { marginTop: key === "h" ? 0 : 9 } },
+        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759" } }, label),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#1B1B1B", lineHeight: 1.55, marginTop: 3 } }, items.join("  \u00B7  "))));
+    return (react_1.default.createElement("div", { style: { border: "2px solid #D8D0BF", background: "#EFE9DC", padding: "10px 12px", marginTop: 12 } },
+        row("Hindrances", HINDRANCES, "h"),
+        row("Awakening factors", AWAKENING_FACTORS, "a")));
 }
-function MindStep({ entry, setEntry, practice }) {
-    return (react_1.default.createElement(Card, { title: "How was the mind?", sub: "Two readings, neither one a score" },
-        react_1.default.createElement(Field, { label: "Energy" },
-            react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MIND_ENERGY.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.energy === r.key, onClick: () => setEntry((e) => ({ ...e, energy: r.key })) }, r.label))))),
-        react_1.default.createElement(Field, { label: "Attitude of the observing mind" },
-            react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MIND_ATTITUDE.map((r) => (react_1.default.createElement(Chip, { key: r.key, active: entry.attitude === r.key, onClick: () => setEntry((e) => ({ ...e, attitude: r.key })) }, r.label))))),
-        react_1.default.createElement(RecentSits, { practice: practice }),
-        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6, marginTop: 4 } }, "Slack asks for interest and energy next time; agitated asks for settling. Neither is a better sit.")));
-}
-function ReviewLine({ entry }) {
-    const e = MIND_ENERGY.find((x) => x.key === entry.energy);
-    const a = MIND_ATTITUDE.find((x) => x.key === entry.attitude);
-    return (react_1.default.createElement("div", null,
-        e ? e.short : "No energy noted",
-        " \u00B7 ",
-        a ? a.short : "No attitude noted"));
-}
-function PracticeWizard({ onCancel, onComplete, practice }) {
+function PracticeWizard({ onCancel, onComplete }) {
+    var _a;
     const [step, setStep] = (0, react_1.useState)(0);
     const [entry, setEntry] = (0, react_1.useState)({
         date: localDateStr(),
-        type: null, duration: 15, energy: null, attitude: null, journal: "",
+        type: null, duration: 15, journal: "",
     });
-    const steps = ["type", "duration", "mind", "journal", "review"];
+    // The mind step is gone; nothing replaced it. Type, duration, whatever is
+    // worth writing down, save.
+    const steps = ["type", "duration", "journal", "review"];
     const total = steps.length;
     const current = steps[step];
     const next = () => setStep((s) => Math.min(total - 1, s + 1));
@@ -19624,23 +19633,21 @@ function PracticeWizard({ onCancel, onComplete, practice }) {
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, MEDITATION_TYPES.map((t) => (react_1.default.createElement(Chip, { key: t.key, active: entry.type === t.key, onClick: () => setEntry((e) => ({ ...e, type: t.key })) }, t.label)))))),
         current === "duration" && (react_1.default.createElement(Card, { title: "Duration", sub: "How long did you sit?" },
             react_1.default.createElement(Stepper, { value: entry.duration, step: 5, unit: "min", min: 1, onChange: (v) => setEntry((e) => ({ ...e, duration: v })) }))),
-        current === "mind" && (react_1.default.createElement(MindStep, { entry: entry, setEntry: setEntry, practice: practice })),
         current === "journal" && (react_1.default.createElement(Card, { title: "Journal", sub: "Optional \u2014 whatever's worth writing down" },
-            react_1.default.createElement(PointerPrompt, { type: entry.type }),
-            react_1.default.createElement(SilaJournalPrompt, null),
+            react_1.default.createElement(JournalPassage, null),
             react_1.default.createElement("textarea", { value: entry.journal, onChange: (ev) => setEntry((e) => ({ ...e, journal: ev.target.value })), placeholder: "What came up, what you noticed, anything on your mind\u2026", style: {
                     width: "100%", minHeight: 140, borderRadius: 0, border: "2px solid #1B1B1B",
                     padding: 12, fontFamily: "'Inter', sans-serif", fontSize: 14, resize: "vertical",
                     background: "#F9F6EE", color: "#1B1B1B", lineHeight: 1.6,
-                } }))),
+                } }),
+            react_1.default.createElement(ReflectionFrame, null))),
         current === "review" && (react_1.default.createElement(Card, { title: "Review & save" },
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: "#1B1B1B", lineHeight: 1.9 } },
                 react_1.default.createElement("div", null,
-                    MEDITATION_TYPES.find((t) => t.key === entry.type)?.label || "No type set",
+                    ((_a = MEDITATION_TYPES.find((t) => t.key === entry.type)) === null || _a === void 0 ? void 0 : _a.label) || "No type set",
                     " \u00B7 ",
                     entry.duration,
                     " min"),
-                react_1.default.createElement(ReviewLine, { entry: entry }),
                 entry.journal && react_1.default.createElement("div", { style: { marginTop: 8, fontFamily: "'Inter', sans-serif", fontStyle: "italic" } },
                     "\"",
                     entry.journal.slice(0, 120),
@@ -19657,109 +19664,41 @@ function PracticeWizard({ onCancel, onComplete, practice }) {
                 "Next ",
                 react_1.default.createElement(ChevronRight, { size: 16 }))))));
 }
-// ---------- practice pointers (daily contemplative prompt) ----------
-// A fixed library of short pointers drawn from Theravada insight sources.
-// Deliberately has no score, no streak, and no stage: the point is to put a
-// quality of attention in view, not to grade the sit. Rotation is derived from
-// the date, so the pointer is stable all day and cycles through the whole
-// library before repeating.
-const PRACTICE_POINTERS = [
-    { theme: "Attitude", text: "Check the attitude behind the watching. Is it curious, or is it trying to get somewhere?", source: "after Sayadaw U Tejaniya" },
-    { theme: "Attitude", text: "Wanting something to happen is greed. Pushing something away is aversion. Not noticing either is delusion. See which one is running.", source: "after Sayadaw U Tejaniya" },
-    { theme: "Attitude", text: "You don't have to make anything happen. You only have to know what is happening.", source: "after Sayadaw U Tejaniya" },
-    { theme: "Attitude", text: "Why focus so hard? Check whether the effort is coming from interest or from wanting a result.", source: "Sayadaw U Tejaniya" },
-    { theme: "Attitude", text: "The mind that watches is also an object. What state is it in right now?", source: "after Sayadaw U Tejaniya" },
-    { theme: "Attitude", text: "Is awareness comfortable and alert, or tense and narrow? Tension is information, not failure.", source: null },
-    { theme: "Attitude", text: "A sit full of distraction that you saw clearly is not a failed sit.", source: null },
-    { theme: "Quality of attention", text: "In the early discourses mindfulness stands back and observes rather than intervening. See whether attention can watch without correcting.", source: "after Bhikkhu Analayo" },
-    { theme: "Quality of attention", text: "Try the wide-angle lens — whole body, open mind — rather than a narrow beam drilled into one point.", source: "after Bhikkhu Analayo" },
-    { theme: "Quality of attention", text: "If you note, listen to the tone of the noting. Harsh, bored, soft? The tone matters more than the word.", source: "after Gil Fronsdal" },
-    { theme: "Quality of attention", text: "How do you pay attention in such a way that you stay soft and receptive?", source: "Gil Fronsdal" },
-    { theme: "Quality of attention", text: "Some traditions teach mindfulness as plunging into its object; the older texts teach it as receiving. You can feel the difference in your body.", source: null },
-    { theme: "Balance", text: "Energy and concentration balance each other. Restless means too much push; dull means too little. Which is it today?", source: null },
-    { theme: "Balance", text: "Faith and wisdom balance each other. Over-believing goes credulous; over-analyzing goes dry. Which way have you been leaning?", source: null },
-    { theme: "Balance", text: "Mindfulness is the one faculty that can never be excessive. Everything else can be overdone.", source: null },
-    { theme: "Balance", text: "The remedy for imbalance is to strengthen the opposite quality, not to fight the excess.", source: null },
-    { theme: "Balance", text: "Strong concentration with weak energy tips into idleness. If you keep sinking, that's the likely cause.", source: "Visuddhimagga" },
-    { theme: "Awakening factors", text: "When the mind is sluggish, this is the wrong time for calm. Rouse interest, energy, gladness instead.", source: "after SN 46.53" },
-    { theme: "Awakening factors", text: "When the mind is agitated, this is the wrong time for effort. Lean toward tranquility, collectedness, equanimity.", source: "after SN 46.53" },
-    { theme: "Awakening factors", text: "Ask first whether the mind is slack or agitated. The right medicine depends entirely on the answer.", source: null },
-    { theme: "Awakening factors", text: "Investigation isn't thinking about experience. It's an interested looking at what's actually here.", source: null },
-    { theme: "Awakening factors", text: "Gladness is a factor of awakening, not a distraction from it. If some arises, it's allowed.", source: null },
-    { theme: "Awakening factors", text: "Tranquility is the body and mind settling. Notice whether it arrives on its own once you stop pushing.", source: null },
-    { theme: "Hindrances", text: "The instruction is to know a hindrance is here, know how it came, know how it goes. Recognition comes before removal.", source: "Satipatthana Sutta" },
-    { theme: "Hindrances", text: "There's a difference between pushing a hindrance out of sight and seeing through it. Which did you do?", source: null },
-    { theme: "Hindrances", text: "Restlessness and worry are one pair; sloth and torpor another. They ask for opposite responses.", source: null },
-    { theme: "Hindrances", text: "Doubt is a hindrance, not a verdict on your practice.", source: null },
-    { theme: "Hindrances", text: "A pleasant state you're holding onto is a hindrance wearing a good disguise.", source: null },
-    { theme: "Hindrances", text: "The hindrances are called coverings — a lake whose bottom you can't see. The water isn't ruined, only stirred.", source: null },
-    { theme: "Clear knowing", text: "Mindfulness remembers to stay. Clear comprehension knows what's happening and why. Two different qualities.", source: null },
-    { theme: "Clear knowing", text: "Clear comprehension includes knowing whether what you're doing is suitable right now.", source: null },
-    { theme: "Clear knowing", text: "Bare attention is the beginning of right mindfulness, not the whole of it.", source: "after Nyanaponika Thera" },
-    { theme: "Clear knowing", text: "Knowing that feelings arise, remain, and pass — that knowing is already insight, not preparation for it.", source: null },
-    { theme: "Gaining mind", text: "Are you sitting to get something, or to put something down?", source: "after Ajahn Chah" },
-    { theme: "Gaining mind", text: "Ego can turn anything to its own use, including spiritual practice.", source: "after Chogyam Trungpa" },
-    { theme: "Gaining mind", text: "The mind that measures its own progress is exactly what the practice is meant to see through.", source: null },
-    { theme: "Gaining mind", text: "The sit doesn't owe you anything today.", source: null },
-    { theme: "Gaining mind", text: "Notice any impulse to compare this sit against a better one you remember.", source: null },
-    { theme: "Open question", text: "What can I learn here? Ask it on the difficult days especially.", source: "Rob Burbea" },
-    { theme: "Open question", text: "What does this difficulty ask me to let go of?", source: "Jack Kornfield" },
-    { theme: "Open question", text: "How have I added to this difficulty by my own response to it?", source: "after Jack Kornfield" },
-    { theme: "Open question", text: "What is the gold hidden in this situation?", source: "Jack Kornfield" },
-    { theme: "Open question", text: "Where is the value in a session where it seemed like nothing happened?", source: null },
-    { theme: "Metta", text: "Metta's near enemy is attachment — goodwill with a condition attached. Check for the condition.", source: "Visuddhimagga", types: ["metta"] },
-    { theme: "Metta", text: "Compassion's near enemy is grief. If it's tipping into being overwhelmed, that's the counterfeit.", source: "Visuddhimagga", types: ["metta"] },
-    { theme: "Metta", text: "Joy's near enemy is giddiness; equanimity's is indifference. Both sit very close to the real thing.", source: "Visuddhimagga", types: ["metta"] },
-    { theme: "Metta", text: "Metta is an attitude you commit to, not a warm feeling you produce.", source: "after Christina Feldman", types: ["metta"] },
-    { theme: "Metta", text: "If the phrases go mechanical, slow down rather than pushing harder. The words are a doorway, not the point.", source: null, types: ["metta"] },
-    { theme: "Metta", text: "Goodwill toward yourself isn't a preliminary to the real practice. It is the practice.", source: null, types: ["metta"] },
-    { theme: "Breath", text: "The breath doesn't need improving. Let it be the length it is.", source: null, types: ["breath"] },
-    { theme: "Breath", text: "Notice whether you're feeling the breath or thinking about it.", source: null, types: ["breath"] },
-    { theme: "Breath", text: "Anapanasati moves from breath to body to feeling to mind. The breath is a doorway, not a destination.", source: "Anapanasati Sutta", types: ["breath"] },
-    { theme: "Body scan", text: "Scanning can turn into hunting for sensation. See if sensation can come to you instead.", source: null, types: ["bodyScan"] },
-    { theme: "Body scan", text: "Sensation is the object; the knowing of it is what's being trained.", source: null, types: ["bodyScan"] },
-    { theme: "Body scan", text: "Equanimity toward pleasant sensation is the harder half of the practice.", source: null, types: ["bodyScan"] },
-    { theme: "Open awareness", text: "In open awareness the temptation is to manage the field. See if it can be left alone.", source: null, types: ["open"] },
-    { theme: "Open awareness", text: "Notice what awareness does when you stop giving it a job.", source: null, types: ["open"] },
-    { theme: "Open awareness", text: "Without a chosen object, the mind's habits show themselves more plainly. That's the value, not a problem.", source: null, types: ["open"] },
-    { theme: "Breath", text: "Lengthen nothing. The only job is to know this breath as it is.", source: null, types: ["breath"] },
-    { theme: "Breath", text: "When the breath gets subtle, the usual mistake is to grip harder. Soften instead.", source: null, types: ["breath"] },
-    { theme: "Breath", text: "Count if the mind is scattered; drop counting once it settles. The tool is not the practice.", source: null, types: ["breath"] },
-    { theme: "Breath", text: "Where do you actually feel it today — nostrils, chest, belly? Let the body choose.", source: null, types: ["breath"] },
-    { theme: "Body scan", text: "A part with no sensation is still an honest observation. Don't manufacture something to find.", source: null, types: ["bodyScan"] },
-    { theme: "Body scan", text: "Pain and pleasure are both just sensation being known. Watch which one you lean toward.", source: null, types: ["bodyScan"] },
-    { theme: "Body scan", text: "Sweeping fast builds momentum; sweeping slow builds precision. Notice which the mind needs.", source: null, types: ["bodyScan"] },
-    { theme: "Body scan", text: "The body is the first foundation of mindfulness, not a warm-up for the others.", source: "Satipatthana Sutta", types: ["bodyScan"] },
-    { theme: "Open awareness", text: "When there's no chosen object, notice what the mind reaches for on its own.", source: null, types: ["open"] },
-    { theme: "Open awareness", text: "Open awareness isn't a blank mind. It's a mind that isn't picking.", source: null, types: ["open"] },
-    { theme: "Open awareness", text: "If it drifts into daydream, that's the edge of the practice, not a failure of it.", source: null, types: ["open"] },
-    { theme: "Open awareness", text: "Can awareness know a sound and a thought and a sensation without ranking them?", source: null, types: ["open"] },
-    { theme: "Metta", text: "Start where it flows easily. Forcing metta toward a hard person too early teaches the mind to fake it.", source: "Visuddhimagga", types: ["metta"] },
-    { theme: "Metta", text: "Notice whether the goodwill narrows when you turn it toward yourself.", source: null, types: ["metta"] },
-];
-function pointerPool(type) {
-    // Imported passages lead each pool; the built-in prompts sit underneath until
-    // enough have been imported for that slot to stand on its own.
-    const general = blendedPool(importedGeneral(), PRACTICE_POINTERS.filter((p) => !p.types), LIBRARY_FULL.general);
-    if (!type)
-        return general;
-    const matched = blendedPool(importedForType(type), PRACTICE_POINTERS.filter((p) => p.types && p.types.indexOf(type) !== -1), LIBRARY_FULL.type);
-    // Type-specific pointers are few, so fall back to the general pool rather
-    // than showing the same handful every time he picks that practice.
-    return matched.length ? matched : general;
+// ---------- the day's passage ----------
+// There used to be a library of pointers written here, in the app's own voice,
+// with sources reading "after SN 46.53" or "after Sayadaw U Tejaniya". Those
+// were paraphrases wearing an attribution, which borrows a teacher's authority
+// for a sentence the teacher never said, and the ones with no source at all
+// were simply this app talking like a teacher. Both are gone. Every line shown
+// in Practice is now a teacher's own words, imported from a page and checked
+// back against it word for word. An empty library shows an empty slot and says
+// so, which is the honest state rather than a gap to fill with writing.
+// "Another" has to mean the same thing on the Practice tab and inside the log,
+// or the passage above the reflection box would disagree with the one read
+// before sitting. One passage a day, held per day in storage rather than in
+// either component's own state.
+const PASSAGE_OFFSET_KEY = "passage-offset";
+function passageOffset() {
+    const raw = lsGet(PASSAGE_OFFSET_KEY);
+    if (!raw)
+        return 0;
+    try {
+        const v = JSON.parse(raw.value);
+        return v && v.date === localDateStr() && Number.isFinite(v.n) ? v.n : 0;
+    }
+    catch (e) {
+        return 0;
+    }
 }
-function pointerForDate(dateStr, pool, offset) {
-    const n = pool.length;
-    if (n === 0)
-        return null;
-    const days = Math.floor(Date.parse(dateStr + "T00:00:00") / 86400000);
-    if (!Number.isFinite(days))
-        return pool[0];
-    const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b));
-    let stride = 17;
-    while (gcd(stride, n) !== 1)
-        stride += 1;
-    return pool[(((days * stride) % n) + n + (offset || 0)) % n];
+// Written straight rather than through lsSet: a preference this small failing
+// to persist is not worth raising the storage-failure banner over.
+function bumpPassageOffset() {
+    const n = passageOffset() + 1;
+    try {
+        localStorage.setItem("ledger:" + PASSAGE_OFFSET_KEY, JSON.stringify({ date: localDateStr(), n }));
+    }
+    catch (e) { }
+    return n;
 }
 // ---------- kitchen rules (the cook's own knowledge base) ----------
 // These used to be hard-coded into the chef prompt, which meant every lesson
@@ -19878,35 +19817,6 @@ const PRECEPTS = [
         gloss: "The one that guards the other four: clouded, they all get harder to keep.",
     },
 ];
-// A separate subpool, kept out of PRACTICE_POINTERS so it can be weighted
-// differently. Each pointer names the precept it belongs to, which is what the
-// Today band highlights — precept 0 means the training as a whole.
-const SILA_POINTERS = [
-    { theme: "Sila", text: "Virtue is not a rule you obey. It is a way of not adding to the trouble.", source: null, precept: 0 },
-    { theme: "Sila", text: "The precepts are undertaken, not imposed. Notice the difference in how that feels.", source: null, precept: 0 },
-    { theme: "Sila", text: "Sila, samadhi, panna — conduct first, because an agitated conscience will not sit still.", source: null, precept: 0 },
-    { theme: "Sila", text: "A precept kept is not a good deed done. It is a source of remorse removed.", source: "after AN 11.1", precept: 0 },
-    { theme: "Sila", text: "Where a precept was broken, the practice is to see it clearly and take it up again. Not to make a case for the defence.", source: null, precept: 0 },
-    { theme: "Sila", text: "Keeping a precept for a day teaches you more about the impulse than a year of agreeing with it in principle.", source: null, precept: 0 },
-    { theme: "Sila", text: "Attention without discernment is not yet right mindfulness. Conduct is where the discernment shows.", source: "after B. Alan Wallace", precept: 0 },
-    { theme: "Harming", text: "Watch for the small cruelty that costs you nothing — the swat, the dismissal, the impatience with something slow.", source: null, precept: 1 },
-    { theme: "Harming", text: "Harm usually starts as irritation. Catch it there and the precept keeps itself.", source: null, precept: 1 },
-    { theme: "Harming", text: "Non-harming includes the way you speak to yourself about a bad sit.", source: null, precept: 1 },
-    { theme: "Taking", text: "What did you take today that wasn't offered? Time, attention, the last of something.", source: null, precept: 2 },
-    { theme: "Taking", text: "The impulse to take is easier to see than the taking. Watch for the reaching.", source: null, precept: 2 },
-    { theme: "Taking", text: "Generosity is the same precept read forwards instead of backwards.", source: null, precept: 2 },
-    { theme: "Sexuality", text: "Where does desire ask you to be less than honest with someone?", source: null, precept: 3 },
-    { theme: "Sexuality", text: "The question is not whether wanting arises. It is what the wanting talks you into.", source: null, precept: 3 },
-    { theme: "Sexuality", text: "Restraint here is care for another person's trust, not a verdict on the body.", source: null, precept: 3 },
-    { theme: "Speech", text: "Is it true, is it kind, is it the right time? Three filters, and most speech fails the third.", source: "after MN 58", precept: 4 },
-    { theme: "Speech", text: "The lie you tell to look slightly better is the one worth catching. It is the most frequent.", source: null, precept: 4 },
-    { theme: "Speech", text: "Silence is available. Notice how rarely it gets considered.", source: null, precept: 4 },
-    { theme: "Speech", text: "Exaggeration is false speech wearing a friendly face.", source: null, precept: 4 },
-    { theme: "Heedlessness", text: "What do you reach for when you don't want to feel what's here?", source: null, precept: 5 },
-    { theme: "Heedlessness", text: "Heedlessness is the actual object of this precept. The substance is only the usual route to it.", source: null, precept: 5 },
-    { theme: "Heedlessness", text: "Notice the hour of the day when clarity is worth the least to you. That's the hour this precept is about.", source: null, precept: 5 },
-    { theme: "Heedlessness", text: "The scroll, the second drink, the noise left on. Different doors, same room.", source: null, precept: 5 },
-];
 // Is this date inside the period, and where in it? Returns null outside.
 function silaPeriod(dateStr) {
     if (!dateStr || dateStr.length < 10)
@@ -19934,12 +19844,12 @@ function silaPeriod(dateStr) {
         isClosingDay: dateStr === end,
     };
 }
-// During the period the daily pointer leans hard on the precepts without
-// crowding the rest out: two days in three come from the sila subpool, the
-// third from the general library, so insight practice stays interwoven rather
-// than being suspended for two months.
-// Same coprime-stride walk as pointerForDate, but driven by a caller-supplied
-// ordinal instead of the raw date.
+// During the period the day's passage leans hard on the precepts without
+// crowding the rest out: two days in three come from the precept-tagged
+// passages, the third from the library at large, so insight practice stays
+// interwoven rather than being suspended for two months.
+// A coprime-stride walk driven by a caller-supplied ordinal, so a pool is
+// cycled through completely before anything repeats.
 function pointerFromPool(pool, ordinal) {
     const n = pool.length;
     if (n === 0)
@@ -19950,63 +19860,66 @@ function pointerFromPool(pool, ordinal) {
         stride += 1;
     return pool[(((ordinal * stride) % n) + n) % n];
 }
-function dailyPointerFor(dateStr, type, offset) {
-    const period = silaPeriod(dateStr);
+function dailyPassageFor(dateStr, offset) {
     const off = offset || 0;
-    if (period && ((period.dayIndex + off) % 3) !== 2) {
-        // Count sila days rather than calendar days. Only two days in three land
-        // here, and a date-driven index walking a fixed stride can never reach a
-        // third of the pool once that pattern is imposed on it — eight pointers
-        // would simply never appear. The ordinal counts the days that actually use
-        // this pool, and the year term keeps next September from repeating this one.
-        const d = period.dayIndex + off;
-        const ordinal = Math.floor(d / 3) * 2 + (d % 3) + period.year * 11;
-        const p = pointerFromPool(silaPool(), ordinal);
-        if (p)
-            return p;
-    }
+    const all = passagePool();
+    if (!all.length)
+        return null;
+    const period = silaPeriod(dateStr);
     if (period) {
-        // The interwoven third used to index by date, which only held while the
-        // general pool's length happened not to be a multiple of 3. The pool grows
-        // with every import now, so that assumption can't be relied on: this day
-        // gets the same ordinal treatment, counting the days that actually draw
-        // from this pool rather than the calendar.
+        // Count the days that actually draw from each pool rather than the
+        // calendar. Only two days in three land on the precepts, and a date-driven
+        // index walking a fixed stride can never reach a third of a pool once that
+        // pattern is imposed on it. The year term keeps next September from
+        // repeating this one.
         const d = period.dayIndex + off;
-        const p = pointerFromPool(pointerPool(type), Math.floor(d / 3) + period.year * 5);
-        if (p)
-            return p;
+        if ((d % 3) !== 2) {
+            const sila = silaPassagePool();
+            if (sila.length) {
+                const p = pointerFromPool(sila, Math.floor(d / 3) * 2 + (d % 3) + period.year * 11);
+                if (p)
+                    return p;
+            }
+        }
+        else {
+            const general = generalPassagePool();
+            if (general.length) {
+                const p = pointerFromPool(general, Math.floor(d / 3) + period.year * 5);
+                if (p)
+                    return p;
+            }
+        }
+        // Whichever subset was wanted is empty, so the library at large stands in
+        // rather than the slot going blank.
+        return pointerFromPool(all, Math.floor(d / 3) + period.year * 5);
     }
-    return pointerForDate(dateStr, pointerPool(type), off);
+    const days = Math.floor(Date.parse(dateStr + "T00:00:00") / 86400000);
+    return pointerFromPool(all, (Number.isFinite(days) ? days : 0) + off);
 }
-// The precept the band highlights. When today's pointer is a sila one it names
-// its own precept, so the highlight and the day's inspiration agree. On the
-// interwoven days the pointer is a general one, and the precepts simply rotate.
+// The precept the band highlights. When today's passage is a precept one it
+// names its own, so the highlight and the day's reading agree. Otherwise, and
+// whenever the library has nothing to say, the precepts simply rotate.
 function preceptOfDay(dateStr) {
     const period = silaPeriod(dateStr);
     if (!period)
         return null;
-    const p = dailyPointerFor(dateStr, null, 0);
+    const p = dailyPassageFor(dateStr, passageOffset());
     if (p && p.precept)
         return p.precept;
     return (period.dayIndex % PRECEPTS.length) + 1;
 }
 // ---------- imported teachings ----------
-// The built-in pointer library is written in this app's own voice — useful, but
-// not the teaching itself. A teaching imported from a URL is stored whole, in
-// reading order, in the teacher's own words, and the daily pointer draws its
-// lines from that. The built-in pool stays underneath as a floor so the Practice
-// tab is never blank, and retires slot by slot as the imported library fills.
+// The only source of practice text in the app. A teaching imported from a URL
+// is stored whole, in reading order, in the teacher's own words, and the day's
+// passage is drawn from it. There is no built-in floor underneath: an empty
+// library means an empty slot, which is the truthful thing to show.
 const TEACHINGS_KEY = "teachings";
-// A dharma talk transcript runs 3–6k words. The cap is generous enough for a
+// A dharma talk transcript runs 3\u20136k words. The cap is generous enough for a
 // long sutta and low enough that one bad import can't eat the storage quota
 // every other feature shares.
 const TEACHING_CHAR_CAP = 80000;
-// Counts at which the built-in pointers stop being mixed in. Held per slot,
-// because the type-matched journal prompts fill far more slowly than the
-// general daily pointer does.
-const LIBRARY_FULL = { general: 20, type: 8, sila: 15 };
-// Pool functions are called from components scattered across the tree — the
-// daily pointer, the journal prompt inside the wizard, the sila prompt — and
+// Pool functions are called from components scattered across the tree \u2014 the
+// Practice tab, the reflection box inside the log, the sila band \u2014 and
 // threading a teachings prop through all of them would mean touching every
 // component in between. The list is mirrored here instead and refreshed
 // whenever the state that owns it changes, so a re-render always reads current
@@ -20017,6 +19930,12 @@ function setImportedTeachings(list) {
 }
 // Flatten every teaching's pointer-worthy segments into one list, each carrying
 // its own attribution so a line can always be traced back to who said it.
+//
+// No theme label. Segments used to arrive with a two-or-three-word theme the
+// reader wrote ("Nibbana, Letting Go"), and the Practice card displayed it as a
+// header above the passage — model-composed words sitting in the one place that
+// is supposed to hold nothing but a teacher's own. Themes on already-imported
+// teachings stay in storage and are simply never read.
 function teachingPassages() {
     const out = [];
     for (const t of IMPORTED_TEACHINGS) {
@@ -20026,49 +19945,45 @@ function teachingPassages() {
             if (!s || !s.pointer || !s.text)
                 continue;
             out.push({
-                theme: s.theme || "Teaching",
                 text: s.text,
                 source: [t.author, t.work || t.title].filter(Boolean).join(" \u2014 "),
                 url: t.url || null,
-                types: s.types,
                 precept: s.precept,
             });
         }
     }
     return out;
 }
-function importedGeneral() {
-    return teachingPassages().filter((p) => !p.types && p.precept === undefined);
+// One pool now, not three. Passages used to be routed by practice type as well,
+// which split a small library into pools too thin to rotate and meant the tab
+// and the log could show two different lines on the same day. Everything
+// imported is eligible every day.
+function passagePool() {
+    return teachingPassages();
 }
-function importedForType(type) {
-    return teachingPassages().filter((p) => p.types && p.types.indexOf(type) !== -1);
-}
-function importedSila() {
+function silaPassagePool() {
     return teachingPassages().filter((p) => p.precept !== undefined);
 }
-// Below the threshold the two pools are shown together, so an imported line
-// starts appearing the day it arrives instead of waiting for a quota. At or
-// above it the built-ins drop out of that slot entirely.
-function blendedPool(imported, builtin, threshold) {
-    return imported.length >= threshold ? imported : imported.concat(builtin);
+// The complement, needed only during the sila period: the day in three that
+// stays with insight practice has to be able to miss the precepts, and drawing
+// it from the whole library would land it back on conduct roughly as often as
+// chance allowed.
+function generalPassagePool() {
+    return teachingPassages().filter((p) => p.precept === undefined);
 }
-function silaPool() {
-    return blendedPool(importedSila(), SILA_POINTERS, LIBRARY_FULL.sila);
-}
-// How full each slot is, for the readout on the Practice tab.
 function libraryStatus() {
     return {
         sources: IMPORTED_TEACHINGS.length,
         passages: teachingPassages().length,
-        generalFull: importedGeneral().length >= LIBRARY_FULL.general,
-        silaFull: importedSila().length >= LIBRARY_FULL.sila,
+        sila: silaPassagePool().length,
     };
 }
 // ---------- importing ----------
 const TEACHING_SYSTEM = `You are importing a Buddhist teaching into a practitioner's personal practice journal. You are an extractor, not an author.
 
 Absolute rules:
-- Every word you place in "segments" must be the teacher's own words, copied verbatim from the page. Do not paraphrase, summarise, modernise, condense or compose. If you cannot copy it, leave it out.
+- Every word you place in "segments" must be the teacher's own words, copied verbatim from the page. Do not paraphrase, summarise, modernise, condense or compose. Do not correct spelling, expand an abbreviation or tidy punctuation. If you cannot copy it, leave it out.
+- Every segment is checked character by character against the page after you reply. Anything that is not on the page word for word is thrown away, and an import with too many of those is refused outright.
 - Add no commentary, framing or pointers of your own. Not one sentence.
 - Skip navigation, headers, footers, donation appeals, comment threads, copyright notices and audio player text.
 - Some pages return JSON rather than prose. Rebuild the teaching from it before segmenting, and never present JSON keys, segment ids or markup as text.
@@ -20080,7 +19995,7 @@ Return ONLY a JSON object. No preamble, no markdown fences:
   "author": "the teacher, or the translator, as the page names them",
   "work": "sutta reference or collection if the page gives one, otherwise null",
   "segments": [
-    { "text": "verbatim text", "pointer": true, "theme": "Attitude", "types": ["breath"], "precept": 4 }
+    { "text": "verbatim text", "pointer": true, "precept": 4 }
   ]
 }
 
@@ -20088,11 +20003,67 @@ The segments must cover the whole teaching in reading order, so that joining the
 
 For each segment:
 - "pointer": true only when the segment stands on its own as something worth holding in mind during a sit. Narrative setup, retreat logistics, asides and sentences that need the previous one to make sense are false. Expect roughly a quarter to a third to be true.
-- "theme": two or three words naming what it concerns — Attitude, Effort, Hindrances, Metta, Impermanence and so on. Only on segments where pointer is true.
-- "types": only when the segment speaks to one specific practice. Allowed: "breath", "bodyScan", "metta", "open". Omit otherwise.
 - "precept": only when the segment concerns ethical conduct. 1 harming, 2 taking what is not given, 3 sexual misconduct, 4 false speech, 5 intoxicants, 0 for virtue in general. Omit otherwise.
 
 If the page is readable but is not a Buddhist teaching — an index, a biography, a shop page — return {"error":"not a teaching"}.`;
+// Everything under a tool-result block, walked for strings. The shape of a
+// web_fetch result has changed before and will again; what matters is that the
+// page text is somewhere inside it, not which key happens to hold it.
+function collectStrings(node, out, depth) {
+    if (depth > 8 || out.length > 5000)
+        return out;
+    if (typeof node === "string") {
+        out.push(node);
+        return out;
+    }
+    if (Array.isArray(node)) {
+        for (const v of node)
+            collectStrings(v, out, depth + 1);
+        return out;
+    }
+    if (node && typeof node === "object") {
+        for (const k of Object.keys(node))
+            collectStrings(node[k], out, depth + 1);
+        return out;
+    }
+    return out;
+}
+// Letters and digits only, accents folded off. Two texts differing solely in
+// quotation marks, spacing, line breaks, dashes or diacritics compare equal;
+// two differing by a single word do not. Pali diacritics matter here \u2014 a
+// reader that renders sati-sampaja\u00f1\u00f1a as sati-sampajanna has still copied
+// the passage, and should not be refused for it.
+function verbatimKey(str) {
+    let t = String(str || "");
+    try {
+        t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    }
+    catch (e) { }
+    return t.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+// The text that actually came off the page, as one comparable string. A page
+// that returns JSON \u2014 SuttaCentral's text API does \u2014 arrives with the teaching
+// split across values and segment ids sitting between them, so the raw body is
+// not a haystack the rebuilt prose can be found in. Its values get joined and
+// added alongside the raw text rather than replacing it.
+function fetchedHaystack(blocks) {
+    const raw = [];
+    for (const b of blocks) {
+        if (b && b.type === "web_fetch_tool_result")
+            collectStrings(b, raw, 0);
+    }
+    const extra = [];
+    for (const str of raw) {
+        const t = str.trim();
+        if (t.length < 40 || (t[0] !== "{" && t[0] !== "["))
+            continue;
+        try {
+            extra.push(collectStrings(JSON.parse(t), [], 0).join(" "));
+        }
+        catch (e) { }
+    }
+    return verbatimKey(raw.concat(extra).join(" "));
+}
 // SuttaCentral renders its text in the browser, so fetching the page itself
 // returns an empty shell that used to arrive as a garbled or misleading import.
 // Its text lives behind a JSON API instead, so those links get rewritten before
@@ -20190,32 +20161,45 @@ async function fetchTeaching(url) {
     if (parsed && parsed.error) {
         throw new Error(String(parsed.error).indexOf("short") !== -1 ? "too-short" : "not-a-teaching");
     }
+    // "Extractor, not author" was a line in a prompt and nothing more, which made
+    // it a hope rather than a property. Every segment is now checked back against
+    // the text that actually came off the page. Anything not there word for word
+    // is dropped before it can reach the library, so no sentence the app or the
+    // reader composed can ever appear as a teaching.
+    const haystack = fetchedHaystack(blocks);
+    if (haystack.length < TEACHING_MIN_CHARS)
+        throw new Error("unverifiable");
     const segsIn = Array.isArray(parsed.segments) ? parsed.segments : [];
-    // Trust nothing about the shape coming back. A stray precept of 9 or a types
-    // value the app has never heard of would sit in storage forever and quietly
-    // route a passage into a pool that never surfaces it.
-    const TYPES = ["breath", "bodyScan", "metta", "open"];
+    // Trust nothing about the shape coming back. A stray precept of 9 would sit
+    // in storage forever and quietly route a passage into a pool that never
+    // surfaces it.
     const segments = [];
     let chars = 0;
+    let dropped = 0;
     for (const s of segsIn) {
-        const t = typeof s?.text === "string" ? s.text.trim() : "";
+        const t = typeof (s === null || s === void 0 ? void 0 : s.text) === "string" ? s.text.trim() : "";
         if (!t)
             continue;
+        const key = verbatimKey(t);
+        if (!key || haystack.indexOf(key) === -1) {
+            dropped++;
+            continue;
+        }
         chars += t.length;
         if (chars > TEACHING_CHAR_CAP)
             break;
         const seg = { text: t, pointer: s.pointer === true };
-        if (seg.pointer && typeof s.theme === "string" && s.theme.trim())
-            seg.theme = s.theme.trim();
-        const types = Array.isArray(s.types) ? s.types.filter((x) => TYPES.indexOf(x) !== -1) : [];
-        if (types.length)
-            seg.types = types;
         if (typeof s.precept === "number" && s.precept >= 0 && s.precept <= 5)
             seg.precept = s.precept;
         segments.push(seg);
     }
+    // One or two casualties are ordinary \u2014 a reader that silently fixed a typo or
+    // joined a hyphenated line break. Losing more than it kept means it was
+    // rewriting rather than copying, and none of it can be trusted.
+    if (dropped > segments.length)
+        throw new Error("paraphrased");
     if (!segments.length)
-        throw new Error("empty");
+        throw new Error(dropped ? "paraphrased" : "empty");
     // Second gate, on what actually arrived rather than on what the reader said
     // about it. An app shell can still produce two or three stray segments.
     if (chars < TEACHING_MIN_CHARS)
@@ -20228,6 +20212,7 @@ async function fetchTeaching(url) {
         work: (typeof parsed.work === "string" && parsed.work.trim()) || null,
         addedAt: localDateStr(),
         truncated: chars > TEACHING_CHAR_CAP,
+        dropped,
         segments,
     };
 }
@@ -20237,6 +20222,8 @@ const TEACHING_ERRORS = {
     "too-short": "Almost no readable text came off that page. Audio-only talks, PDF-only sites and pages that build themselves in the browser all arrive empty. Look for a page with the transcript written out as text.",
     truncated: "That talk came back longer than there was room for. Try a single talk rather than a whole collection page.",
     unreadable: "The reply came back garbled. Worth trying once more.",
+    paraphrased: "Too much of what came back was not on that page word for word, so the import was refused and nothing was saved. Only direct quotation goes into the library.",
+    unverifiable: "The page text could not be read back afterwards to check the passages against it, so nothing was saved.",
     empty: "Nothing readable came off that page \u2014 most likely audio-only or a PDF.",
 };
 // ---------- the teachings card on the Practice tab ----------
@@ -20268,7 +20255,8 @@ function TeachingsCard({ teachings, setTeachings }) {
             setTeachings((prev) => [t, ...prev]);
             setUrl("");
             const kept = t.segments.filter((s) => s.pointer).length;
-            setNote(`Added "${t.title}" \u2014 ${t.segments.length} passages, ${kept} in the rotation.`);
+            setNote(`Added "${t.title}" \u2014 ${t.segments.length} passages, ${kept} in the rotation.` +
+                (t.dropped ? ` ${t.dropped} dropped: not on the page word for word.` : ""));
         }
         catch (e) {
             const m = String(e && e.message ? e.message : e);
@@ -20303,8 +20291,7 @@ function TeachingsCard({ teachings, setTeachings }) {
                     status.sources,
                     " SOURCE",
                     status.sources === 1 ? "" : "S",
-                    " \u00B7 ",
-                    status.generalFull ? "LIBRARY CARRYING" : "BUILT-INS FILLING IN")),
+                    status.sila ? ` \u00B7 ${status.sila} ON CONDUCT` : "")),
             react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 26, fontWeight: 800, color: "#1B1B1B", lineHeight: 1 } }, open ? "\u2013" : "+")),
         open && (react_1.default.createElement("div", { style: { padding: "0 18px 18px", display: "flex", flexDirection: "column", gap: 16 } },
             react_1.default.createElement("div", null,
@@ -20312,9 +20299,7 @@ function TeachingsCard({ teachings, setTeachings }) {
                 react_1.default.createElement("button", { onClick: runImport, disabled: busy, style: { ...btnPrimary, marginTop: 10, width: "100%", justifyContent: "center", opacity: busy ? 0.55 : 1 } }, busy ? "Reading the page\u2026" : "Import teaching"),
                 err && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#BE3B2A", marginTop: 10, lineHeight: 1.5 } }, err)),
                 note && !err && (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#2F6B4F", marginTop: 10, lineHeight: 1.5 } }, note))),
-            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", lineHeight: 1.6, borderTop: "2px solid #D8D0BF", paddingTop: 12 } }, status.generalFull
-                ? "The library carries the daily pointer on its own now \u2014 the built-in prompts have stepped back."
-                : `Built-in prompts are still filling the gaps. ${Math.max(0, LIBRARY_FULL.general - importedGeneral().length)} more imported passages and they retire.`),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", lineHeight: 1.6, borderTop: "2px solid #D8D0BF", paddingTop: 12 } }, "This library is the only thing Practice draws on. Every passage is checked back against the page it came from, character by character, and anything not there word for word is thrown away rather than stored."),
             teachings.length === 0 ? (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6 } }, "Nothing imported yet. accesstoinsight.org, dhammatalks.org, ajahnchah.org, plumvillage.org transcriptions and insightmeditationcenter.org transcribed talks all read cleanly, and suttacentral.net links are rewritten to its text API. Audio-only talks and PDF-only sites \u2014 Forest Sangha, Amaravati, audiodharma \u2014 have no text to import.")) : (react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12 } }, teachings.map((t) => {
                 const open = openId === t.id;
                 const kept = t.segments.filter((s) => s.pointer).length;
@@ -20349,38 +20334,51 @@ function TeachingsCard({ teachings, setTeachings }) {
 // voice. When the library holds something a teacher actually said about the
 // precept in view, that goes there instead, and the written question drops back
 // to being the floor.
-function preceptPassage(dateStr, n) {
-    const pool = importedSila().filter((p) => p.precept === n || p.precept === 0);
-    if (!pool.length)
+// Source attribution, shown wherever a passage is. It is not decoration: it is
+// the whole claim the passage makes for itself, so it never gets dropped to
+// save a line.
+function PassageSource({ passage, size = 11 }) {
+    if (!passage || (!passage.source && !passage.url))
         return null;
-    const days = Math.floor(Date.parse(dateStr + "T00:00:00") / 86400000);
-    return pointerFromPool(pool, Number.isFinite(days) ? days : 0);
+    return (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: size, color: "#6E6759", marginTop: 8, lineHeight: 1.5 } },
+        passage.source,
+        passage.url && (react_1.default.createElement("a", { href: passage.url, target: "_blank", rel: "noreferrer", style: { color: "#6E6759", marginLeft: passage.source ? 8 : 0 } }, "Source"))));
 }
-function DailyPointer() {
-    const [offset, setOffset] = (0, react_1.useState)(0);
-    const p = dailyPointerFor(localDateStr(), null, offset);
-    if (!p)
-        return null;
-    return (react_1.default.createElement("div", { style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "16px 18px" } },
+// The card on the Practice tab. One passage, the same one the reflection box
+// will show later, so what was read before sitting is what is still in view
+// afterwards. With an empty library it says what it is rather than hiding.
+function DailyPassage() {
+    const [, bump] = (0, react_1.useState)(0);
+    const p = dailyPassageFor(localDateStr(), passageOffset());
+    const shell = { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "16px 18px" };
+    if (!p) {
+        return (react_1.default.createElement("div", { style: shell },
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759" } }, "Today"),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 14, lineHeight: 1.65, color: "#6E6759", marginTop: 10 } }, "Nothing in the library yet. Everything shown here is a teacher's own words, taken from a page and checked against it \\u2014 so until a teaching is imported, this stays empty. Add one under Teachings below.")));
+    }
+    return (react_1.default.createElement("div", { style: shell },
         react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } },
-            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759" } }, p.theme),
-            react_1.default.createElement("button", { onClick: () => setOffset((o) => o + 1), title: "Show another pointer", style: {
+            react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759" } }, "Today"),
+            react_1.default.createElement("button", { onClick: () => { bumpPassageOffset(); bump((n) => n + 1); }, title: "Show another passage", style: {
                     border: "2px solid #D8D0BF", background: "#F9F6EE", color: "#6E6759", borderRadius: 0,
                     cursor: "pointer", padding: "3px 9px", flex: "0 0 auto",
                     fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 0.8, textTransform: "uppercase",
                 } }, "Another")),
         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 15, lineHeight: 1.65, color: "#1B1B1B", marginTop: 10 } }, p.text),
-        (p.source || p.url) && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: "#6E6759", marginTop: 10 } },
-            p.source,
-            p.url && (react_1.default.createElement("a", { href: p.url, target: "_blank", rel: "noreferrer", style: { color: "#6E6759", marginLeft: p.source ? 8 : 0 } }, "Source"))))));
+        react_1.default.createElement(PassageSource, { passage: p })));
 }
-function PointerPrompt({ type }) {
-    const p = pointerForDate(localDateStr(), pointerPool(type), 0);
+// The same passage again, above the reflection box, smaller and without the
+// button. There used to be three separate pieces of text on this screen \u2014 a
+// type-matched prompt, a precept prompt, and the tab's own pointer, all
+// different, all at once. One thing to sit with, one thing to answer.
+function JournalPassage() {
+    const p = dailyPassageFor(localDateStr(), passageOffset());
     if (!p)
         return null;
     return (react_1.default.createElement("div", { style: { border: "2px dotted #A9A192", background: "#EFE9DC", padding: "10px 12px", marginBottom: 12 } },
-        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 6 } }, "Worth considering"),
-        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, p.text)));
+        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 6 } }, "Today"),
+        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, p.text),
+        react_1.default.createElement(PassageSource, { passage: p, size: 10 })));
 }
 function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry, teachings = [], setTeachings }) {
     const [editingId, setEditingId] = (0, react_1.useState)(null);
@@ -20404,7 +20402,7 @@ function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry, teach
             react_1.default.createElement("button", { onClick: onStartLog, style: { ...btnPrimary, background: "#F9F6EE", color: "#1B1B1B" } },
                 "Log meditation & journal ",
                 react_1.default.createElement(ChevronRight, { size: 16 }))),
-        react_1.default.createElement(DailyPointer, null),
+        react_1.default.createElement(DailyPassage, null),
         react_1.default.createElement(TeachingsCard, { teachings: teachings, setTeachings: setTeachings }),
         practice.length === 0 ? (react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#6E6759", textAlign: "center", padding: "20px 0" } }, "No entries yet \u2014 your first sit will start the log.")) : (ordered.map((p) => (react_1.default.createElement("div", { key: p.id, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "14px 18px" } },
             react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
@@ -20671,7 +20669,7 @@ function App() {
                 react_1.default.createElement("div", { style: { display: "flex", gap: 8 } },
                     react_1.default.createElement("button", { onClick: () => setLogging(true), style: { ...btnPrimary, flex: 1, justifyContent: "center" } }, "Resume"),
                     react_1.default.createElement("button", { onClick: () => { clearDraft(); setDraft(null); }, style: { ...btnGhost, flex: "0 0 auto", justifyContent: "center" } }, "Discard")))),
-            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { practice: practice, onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete, teachings: teachings, setTeachings: updateTeachings })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan, onUpdateSession: handleSessionUpdate, onDeleteSession: handleSessionDelete })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice, sila: sila, kitchenRules: kitchenRules, teachings: teachings })),
+            logging ? (react_1.default.createElement(LogWizard, { sessions: sessions, exercises: exercises, stretches: stretches, initialDraft: draft, onCancel: () => { clearDraft(); setDraft(null); setLogging(false); }, onComplete: handleComplete })) : practiceLogging ? (react_1.default.createElement(PracticeWizard, { onCancel: () => setPracticeLogging(false), onComplete: handlePracticeComplete })) : tab === "today" ? (react_1.default.createElement(TodayTab, { sessions: sessions, plan: plan, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, onStartLog: () => { clearDraft(); setDraft(null); setLogging(true); }, sila: sila, setSila: updateSila })) : tab === "practice" ? (react_1.default.createElement(PracticeTab, { practice: practice, onStartLog: () => setPracticeLogging(true), onUpdateEntry: handlePracticeUpdate, onDeleteEntry: handlePracticeDelete, teachings: teachings, setTeachings: updateTeachings })) : tab === "kitchen" ? (react_1.default.createElement(KitchenTab, { recipes: recipes, setRecipes: updateRecipes, mealPlan: mealPlan, setMealPlan: updateMealPlan, sessions: sessions, rules: kitchenRules, setRules: updateKitchenRules })) : tab === "history" ? (react_1.default.createElement(HistoryTab, { sessions: sessions, exercises: exercises, allStretches: stretches, recipes: recipes, mealPlan: mealPlan, onUpdateSession: handleSessionUpdate, onDeleteSession: handleSessionDelete })) : (react_1.default.createElement(PlanTab, { plan: plan, setPlan: (p) => { setPlan(p); savePlan(p); }, sessions: sessions, exercises: exercises, setExercises: updateExercises, stretches: stretches, setStretches: updateStretches, recipes: recipes, mealPlan: mealPlan, practice: practice, sila: sila, kitchenRules: kitchenRules, teachings: teachings })),
             toast && (react_1.default.createElement("div", { style: {
                     position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
                     background: "#1B1B1B", color: "#F9F6EE", padding: "10px 20px", borderRadius: 0,
@@ -20685,29 +20683,6 @@ function App() {
 // During the period, the day's precept sits directly above the journal field —
 // close enough that answering it is the path of least resistance, and worded as
 // a question about the day rather than a box to tick.
-function SilaJournalPrompt() {
-    const today = localDateStr();
-    const period = silaPeriod(today);
-    if (!period)
-        return null;
-    const n = preceptOfDay(today);
-    const precept = PRECEPTS.find((x) => x.n === n);
-    if (!precept)
-        return null;
-    // Under the direct-teaching rule this closing line is a teacher's own words
-    // whenever the library holds one for the precept in view. The written
-    // question is the floor, not the default.
-    const passage = preceptPassage(today, n);
-    return (react_1.default.createElement("div", { style: { border: "2px solid #1B1B1B", background: "#F9F6EE", padding: "10px 12px", marginBottom: 12 } },
-        react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 6 } },
-            "Sila period \u00B7 Day ",
-            period.dayNumber,
-            " of ",
-            period.totalDays),
-        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: "#1B1B1B", lineHeight: 1.5 } }, precept.text),
-        react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12.5, color: "#6E6759", lineHeight: 1.6, marginTop: 6 } }, passage ? passage.text : "Where was this easy today, and where did it ask something of you?"),
-        passage && passage.source && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: "#6E6759", marginTop: 5 } }, passage.source))));
-}
 // The band on Today. It names the period, holds the five precepts in view with
 // the day's one picked out, and carries the two markers.
 function SilaBand({ sila, setSila }) {
@@ -20719,8 +20694,8 @@ function SilaBand({ sila, setSila }) {
     const opened = record.opened || null;
     const closed = record.closed || null;
     const activeN = preceptOfDay(today);
-    const pointer = dailyPointerFor(today, null, 0);
-    const isSilaPointer = !!(pointer && pointer.precept !== undefined);
+    const passage = dailyPassageFor(today, passageOffset());
+    const isSilaPassage = !!(passage && passage.precept !== undefined);
     const activePrecept = PRECEPTS.find((x) => x.n === activeN);
     const mark = (field) => setSila((prev) => {
         const base = prev || {};
@@ -20761,10 +20736,10 @@ function SilaBand({ sila, setSila }) {
                     pr.text,
                     on && (react_1.default.createElement("div", { style: { fontSize: 12, fontWeight: 400, opacity: 0.75, marginTop: 4, lineHeight: 1.55 } }, pr.gloss)))));
         })),
-        isSilaPointer && (react_1.default.createElement("div", { style: { marginTop: 12 } },
+        isSilaPassage && (react_1.default.createElement("div", { style: { marginTop: 12 } },
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "#6E6759", marginBottom: 5 } }, "Today"),
-            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, pointer.text),
-            pointer.source && (react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 6 } }, pointer.source)))),
+            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13.5, lineHeight: 1.6, color: "#1B1B1B" } }, passage.text),
+            react_1.default.createElement(PassageSource, { passage: passage, size: 10.5 }))),
         !opened ? (react_1.default.createElement("button", { onClick: () => mark("opened"), style: { ...btnPrimary, background: "var(--activity)", color: "#F9F6EE", marginTop: 16 } }, "Undertake the period")) : !closed && period.isClosingDay ? (react_1.default.createElement(react_1.default.Fragment, null,
             react_1.default.createElement("button", { onClick: () => mark("closed"), style: { ...btnPrimary, background: "var(--activity)", color: "#F9F6EE", marginTop: 16 } }, "Close the period"),
             react_1.default.createElement("div", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5, color: "#6E6759", marginTop: 8 } },
@@ -20849,14 +20824,17 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
                 coach.cardio.duration,
                 " min \u2014 ",
                 coach.cardio.rationale),
-            react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, coach.directives.map((d) => (react_1.default.createElement("div", { key: d.key, style: { borderTop: "1px solid #D8D0BF", paddingTop: 10 } },
-                react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: "#1B1B1B" } },
-                    react_1.default.createElement("span", null, d.label),
-                    react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: "var(--activity)" } },
-                        d.rec?.weight != null ? `${d.rec.weight}${exercises[d.key].unit} · ` : "",
-                        d.rec?.sets ? `${d.rec.sets}×` : "",
-                        d.rec?.reps)),
-                react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 2, lineHeight: 1.5 } }, d.rec?.rationale))))),
+            react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, coach.directives.map((d) => {
+                var _a, _b, _c, _d;
+                return (react_1.default.createElement("div", { key: d.key, style: { borderTop: "1px solid #D8D0BF", paddingTop: 10 } },
+                    react_1.default.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontFamily: "'Inter', sans-serif", fontSize: 13.5, fontWeight: 600, color: "#1B1B1B" } },
+                        react_1.default.createElement("span", null, d.label),
+                        react_1.default.createElement("span", { style: { fontFamily: "'IBM Plex Mono', monospace", fontSize: 12.5, color: "var(--activity)" } },
+                            ((_a = d.rec) === null || _a === void 0 ? void 0 : _a.weight) != null ? `${d.rec.weight}${exercises[d.key].unit} · ` : "",
+                            ((_b = d.rec) === null || _b === void 0 ? void 0 : _b.sets) ? `${d.rec.sets}×` : "", (_c = d.rec) === null || _c === void 0 ? void 0 :
+                            _c.reps)),
+                    react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 2, lineHeight: 1.5 } }, (_d = d.rec) === null || _d === void 0 ? void 0 : _d.rationale)));
+            })),
             react_1.default.createElement("div", { style: { borderTop: "1px solid #D8D0BF", marginTop: 12, paddingTop: 10 } },
                 react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, fontWeight: 600, color: "#1B1B1B", marginBottom: 6 } }, "Stretches after"),
                 react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 4 } }, coach.stretches.map((s) => (react_1.default.createElement("div", { key: s.key, style: { display: "flex", justifyContent: "space-between", fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759" } },
@@ -20909,9 +20887,12 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
                 return sessions.some(s => s.exercises && s.exercises[k] && s.exercises[k].weight);
             }).map((k) => (react_1.default.createElement(ProgressionLadder, { key: k, sessions: sessions, exKey: k, exercises: exercises })))),
         react_1.default.createElement("div", { style: { fontFamily: "'Archivo', sans-serif", fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#1B1B1B", marginTop: 4 } }, "Queued"),
-        react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, plan.queue.filter(q => !sessions.some(s => s.exercises && s.exercises[q.key])).map((q, i) => (react_1.default.createElement("div", { key: i, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "12px 16px" } },
-            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13, color: "#1B1B1B" } }, exercises[q.key]?.label || q.key),
-            react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 2 } }, q.note)))))));
+        react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } }, plan.queue.filter(q => !sessions.some(s => s.exercises && s.exercises[q.key])).map((q, i) => {
+            var _a;
+            return (react_1.default.createElement("div", { key: i, style: { background: "#F9F6EE", border: "2.5px solid #1B1B1B", boxShadow: "6px 6px 0 #1B1B1B", borderRadius: 0, padding: "12px 16px" } },
+                react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13, color: "#1B1B1B" } }, ((_a = exercises[q.key]) === null || _a === void 0 ? void 0 : _a.label) || q.key),
+                react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759", marginTop: 2 } }, q.note)));
+        }))));
 }
 // ---------- chef ----------
 // The chef prompt carries every hard-won constraint from months of actual
@@ -22156,14 +22137,16 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
                     s.hrAvg,
                     "/",
                     s.hrMax),
-                s.exercises && Object.keys(s.exercises).length > 0 && (react_1.default.createElement("div", { style: { marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 } }, Object.entries(s.exercises).map(([k, v]) => (react_1.default.createElement("span", { key: k, style: {
-                        fontFamily: "'Inter', sans-serif", fontSize: 11, padding: "4px 8px",
-                        borderRadius: 0, background: "#D8D0BF", color: "#1B1B1B",
-                    } },
-                    exercises[k]?.label || k,
-                    ": ",
-                    v.weight ?? 0,
-                    exercises[k]?.unit))))),
+                s.exercises && Object.keys(s.exercises).length > 0 && (react_1.default.createElement("div", { style: { marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 } }, Object.entries(s.exercises).map(([k, v]) => {
+                    var _a, _b, _c;
+                    return (react_1.default.createElement("span", { key: k, style: {
+                            fontFamily: "'Inter', sans-serif", fontSize: 11, padding: "4px 8px",
+                            borderRadius: 0, background: "#D8D0BF", color: "#1B1B1B",
+                        } },
+                        ((_a = exercises[k]) === null || _a === void 0 ? void 0 : _a.label) || k,
+                        ": ", (_b = v.weight) !== null && _b !== void 0 ? _b : 0, (_c = exercises[k]) === null || _c === void 0 ? void 0 :
+                        _c.unit));
+                }))),
                 (() => {
                     const done = allStretches.filter((cfg) => normalizeStretchRounds((s.stretchRounds || {})[cfg.key], cfg) > 0);
                     if (done.length === 0)
@@ -22323,11 +22306,12 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
             react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 13, color: "#1B1B1B", lineHeight: 1.6 } }, plan.stretchGuidance)),
         react_1.default.createElement(Card, { title: "Queue", sub: "What's next to add or change \u2014 items already logged are flagged" },
             react_1.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } }, plan.queue.map((q, i) => {
+                var _a;
                 const alreadyLogged = sessions.some(s => s.exercises && s.exercises[q.key]);
                 return (react_1.default.createElement("div", { key: i, style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 } },
                     react_1.default.createElement("div", null,
                         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontWeight: 600, fontSize: 13, color: "#1B1B1B" } },
-                            exercises[q.key]?.label || q.key,
+                            ((_a = exercises[q.key]) === null || _a === void 0 ? void 0 : _a.label) || q.key,
                             alreadyLogged && react_1.default.createElement("span", { style: { color: "var(--activity)", fontWeight: 500 } }, " \u00B7 already logged")),
                         react_1.default.createElement("div", { style: { fontFamily: "'Inter', sans-serif", fontSize: 12, color: "#6E6759" } }, q.note)),
                     react_1.default.createElement("button", { onClick: () => {
