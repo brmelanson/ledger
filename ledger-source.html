@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build: Practice was redesigned around one rule — no text the app wrote itself may appear as practice material. PRACTICE_POINTERS and SILA_POINTERS are deleted; entries sourced &quot;after SN 46.53&quot; or &quot;after Sayadaw U Tejaniya&quot; were paraphrases wearing an attribution, borrowing a teacher&#x27;s authority for a sentence the teacher never said. The model-written `theme` label is gone too — it was displayed as a header above the passage, which put composed words in the one slot meant to hold only a teacher&#x27;s own. Only imported teachings remain, and &quot;extractor, not author&quot; is enforced rather than requested: fetchedHaystack() rebuilds the text that actually came off the page from the web_fetch tool-result blocks (JSON pages have their values joined too, since SuttaCentral splits a sutta across values with segment ids between them), verbatimKey() folds case, punctuation and Pali diacritics, and any segment not found verbatim is dropped. An import losing more than it keeps is refused, as is one whose page can&#x27;t be read back. The model&#x27;s own reply is never part of the haystack. NOTE: the gate applies to new imports only — the 4 teachings already in the library were imported before it existed and have never been checked. One passage a day serves both the Practice tab and the reflection box, held under passage-offset so &quot;Another&quot; moves both; the type-matched journal prompt and the separate sila prompt are gone, as is LIBRARY_FULL blending. An empty library says so rather than falling back. MindStep, RecentSits and ReviewLine are deleted and the wizard is type → duration → journal → review. Do not check that removal against the stored answers: they look well spread, but the spread is an artifact of four named options making selection feel required, so an opaque recollection got worked into something more specific than it was. A self-report field cannot be validated by its own output. They are also gone because U Tejaniya&#x27;s question is an in-sit re-orienting move, not a summary score. MIND_ENERGY and MIND_ATTITUDE survive as key/short pairs only so existing entries render unchanged; older `rating` entries still fall back through practiceReadout — all 38 real entries verified rendering. A fixed ReflectionFrame sits under the box: five hindrances, seven awakening factors, terms only. Watch the sila interleaving if the pools are touched: the day in three that stays with insight practice must draw from generalPassagePool(), not the whole library, or it lands back on conduct about half the time. Known gap: only 9 of 90 passages are precept-tagged and 8 of those are precept 0, so the band&#x27;s precept highlight agrees with the day&#x27;s reading on 3 of 30 September days — a source-material gap, not a bug. Previously: suggestCardioTarget anchors on the median distance across the window rather than the best run; distance no longer advances because pace improved, and a hold requires pace and heart rate to disagree together. RunGraph plots every run with no cap. cardioGroup() folds treadmill and outdoor into one running group. History is editable via SessionEditor. The importer rewrites suttacentral.net links to its JSON text API and gates on TEACHING_MIN_CHARS (1000). Session type “R” skips movement prep and lifting. Stretches are capped at STRETCH_SESSION_CAP (5).</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build (Sept 20 2026), three changes. (1) The Practice tab is gone. Brian stopped using it: logging a sit was a burden he could not afford and having one more thing to attend to was itself hindering the practice, which is the same conclusion the rest of the practice design kept reaching — no streak, no score, nothing to protect — followed all the way down. PracticeTab, PracticeWizard, DailyPassage, JournalPassage and ReflectionFrame are deleted and nothing prompts a sit anywhere. The sila band stays on Today because he asked for it, so the teachings library and dailyPassageFor stay with it and TeachingsCard moved to Plan. His 38 journal entries are NOT deleted: PracticeArchive on the Plan tab renders them read-only, and they still ride in every export and import. (2) Hip thrust is retired as too awkward — a bench to set up and a dumbbell rolled across the hips, which is an exercise that gets skipped, and a skipped hinge trains nothing. The 45° back extension takes over hipHinge at priority 1 with prereq legPress, now loadable (step 5) rather than bodyweight-only, and legCurl&#x27;s prereq moved with it. migrateExercises deactivates his configured hipThrust and stamps retiredAt so it is idempotent; logged hip thrust sets in past sessions are untouched and still render. (3) Stretches can be retired. Every stretch carries a region and a complexity 1-3; retireStretch marks one inactive and pulls in the simplest unused stretch covering the same region, so the routine swaps rather than shrinking. The bench grew from 6 to 16 so every region has at least two options and at least one complexity-1 option. Marking a stretch 0 rounds in the log shows two buttons, because these are different intentions and conflating them made it impossible to shrink the routine at all: Swap it (wrong stretch — pull in something simpler for the same area) and Drop it (want less — the slot closes). RetiredStretches on Plan can bring one back; suggestStretchExpansion never offers a retired stretch again. STRETCH_SESSION_CAP is 4 — three anchors plus one rotating. Do not raise it: the anchors run every session because range gains are muscle-specific and frequency-driven, and the real lever on “these feel too complex” is a smaller pool, not a bigger cap. A retired anchor hands anchor: true to its stand-in. mergeStretches merges stored library entries over their current STRETCH_LIBRARY definition rather than verbatim — without that, the six stretches he added before region existed had no region and silently dropped instead of swapping. Watch: the settling gate in suggestExerciseExpansion will hold the back extension back for one session after any recent addition; that is pre-existing and not a bug. Previously: no app-written text may appear as practice material — fetchedHaystack and verbatimKey check every imported passage back against the page it came from, and the gate applies to new imports only. suggestCardioTarget anchors on the median distance across the window rather than the best run. RunGraph plots every run with no cap. cardioGroup() folds treadmill and outdoor into one running group. History is editable via SessionEditor. Session type “R” skips movement prep and lifting.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -57,6 +57,10 @@ const SEED_SESSIONS = [
 // Written once and shared by the seed config, the library entry and the
 // migration, so the three can&#x27;t drift apart the way the old floor-first
 // version did once the exercise had already been saved to storage.
+const BACK_EXTENSION_EXPLAINER = &quot;Set the pad just below your hip bones — low enough that your hips can fold freely over it, high enough that you are not sliding forward. Feet anchored, ankles under the rollers. Cross your arms over your chest and fold forward at the hips until you feel the hamstrings load. Then drive back up by squeezing your glutes, and stop the moment your body is a straight line from heels to head.\n\nForm cues: the movement is at the hips, not the spine. Chin tucked, ribs down, and do not arch past straight at the top — that turns a glute exercise into a low-back one. Slight rounding of the upper back is fine and keeps the emphasis on the glutes and hamstrings where you want it. Squeeze for a beat at the top, lower slowly.\n\nBodyweight until 12 reps is genuinely easy for three sets. Then add load by hugging a plate to your chest, going up in small jumps — the hips are strong but the low back learns slower than they do.&quot;;
+
+// Kept only so already-logged hip thrust sessions still render their notes.
+// Hip thrust was retired in September 2026 — see the library entry below.
 const HIP_THRUST_EXPLAINER = &quot;Set up on a bench: sit on the floor with your upper back against the long edge of a bench, knees bent, feet flat and about shoulder width. Roll a dumbbell over your hips and rest it in the crease, with a pad or folded towel underneath it. Drive through your heels until your body forms a straight line from knees to shoulders, squeeze the glutes hard for a second at the top, then lower under control.\n\nForm cues: the squeeze comes from the glutes, not from arching your low back — stop when your hips are level with knees and shoulders, not higher. Chin slightly tucked, ribs down. If you feel it in your low back rather than your glutes, your feet are probably too far away; walk them closer. If the bar of the dumbbell digs in, more padding rather than less weight.\n\nThe floor version is the same movement without the bench, and is worth one set as a warm-up. It is not worth programming on its own — unloaded, it sits below the load anything adapts to.&quot;;
 
 // Optional movements for a run-only day. Deliberately kept out of the exercise
@@ -106,56 +110,56 @@ const SEED_EXERCISES = {
     ],
     &quot;explainer&quot;: HIP_THRUST_EXPLAINER,
     &quot;estMinutes&quot;: 7,
-    &quot;active&quot;: true,
+    &quot;active&quot;: false,
     &quot;addedAt&quot;: &quot;2026-07-31&quot;
   },
 };
 
 const STRETCH_TARGET_ACCUM = 60;
 const STRETCHES = [
-  { key: &quot;hipFlexor&quot;, label: &quot;Hip Flexor Lunge&quot;, muscle: &quot;Hip flexors&quot;, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;,
+  { key: &quot;hipFlexor&quot;, label: &quot;Hip Flexor Lunge&quot;, muscle: &quot;Hip flexors&quot;, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;hipFront&quot;, complexity: 2,
     levels: [
       { name: &quot;Half-kneeling lunge&quot;, cue: &quot;Back knee down, front foot forward. Hands on the front knee, torso tall. Push the hips gently forward until you feel the front of the back thigh.&quot; },
       { name: &quot;Tilt and reach&quot;, cue: &quot;Same position, but tuck the tailbone under first — that stops you faking range through the low back. Then reach the same-side arm overhead and lean slightly away.&quot; },
       { name: &quot;Couch stretch&quot;, cue: &quot;Back foot up on a bench or against the wall, shin vertical. Torso upright. This is a big jump — take it at whatever depth lets you stay tall.&quot; },
     ] },
-  { key: &quot;hamstring&quot;, label: &quot;Seated Hamstring&quot;, muscle: &quot;Hamstrings&quot;, holdSeconds: 30, perSide: true, baseRounds: 2, emphasis: &quot;both&quot;,
+  { key: &quot;hamstring&quot;, label: &quot;Seated Hamstring&quot;, muscle: &quot;Hamstrings&quot;, holdSeconds: 30, perSide: true, baseRounds: 2, emphasis: &quot;both&quot;, region: &quot;hamstrings&quot;, complexity: 1,
     levels: [
       { name: &quot;Seated reach&quot;, cue: &quot;One leg extended, the other tucked. Hinge from the hip, not the spine — chest toward the knee rather than nose toward the knee.&quot; },
       { name: &quot;Foot on a step&quot;, cue: &quot;Standing, heel on a low step, leg straight. Hinge forward with a flat back. More range than seated, and easier to keep the spine honest.&quot; },
       { name: &quot;Elevated pike&quot;, cue: &quot;Heel on a bench, ankle pulled into dorsiflexion so the toes point back at you. That adds the nerve-glide element and is markedly harder — back off if anything feels sharp or electric.&quot; },
     ] },
-  { key: &quot;quad&quot;, label: &quot;Standing Quad&quot;, muscle: &quot;Quads&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;B&quot;,
+  { key: &quot;quad&quot;, label: &quot;Standing Quad&quot;, muscle: &quot;Quads&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;B&quot;, region: &quot;hipFront&quot;, complexity: 2,
     levels: [
       { name: &quot;Standing heel to glute&quot;, cue: &quot;Hand on the wall for balance, knees together, heel drawn toward the glute. Keep the pelvis tucked or you will feel it in the low back instead.&quot; },
       { name: &quot;Half-kneeling wall quad&quot;, cue: &quot;Kneel facing away from the wall, back foot up the wall behind you. Torso stays upright.&quot; },
       { name: &quot;Full couch stretch&quot;, cue: &quot;Same setup, shin flat against the wall, torso vertical and tall. One of the harder positions in the routine — expect this to take weeks.&quot; },
     ] },
-  { key: &quot;figureFour&quot;, label: &quot;Figure-Four Glute&quot;, muscle: &quot;Glutes&quot;, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;B&quot;,
+  { key: &quot;figureFour&quot;, label: &quot;Figure-Four Glute&quot;, muscle: &quot;Glutes&quot;, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;B&quot;, region: &quot;glutes&quot;, complexity: 1,
     levels: [
       { name: &quot;Supine figure-four&quot;, cue: &quot;On your back, ankle across the opposite thigh, pull that thigh toward your chest.&quot; },
       { name: &quot;Seated figure-four&quot;, cue: &quot;Sitting, ankle over knee, hinge forward from the hips with a flat back. Gravity does more work than your arms did.&quot; },
       { name: &quot;Pigeon&quot;, cue: &quot;Front shin angled across in front, back leg extended straight behind. Hips square. Support under the front hip with a folded towel if it does not reach the floor.&quot; },
     ] },
-  { key: &quot;calf&quot;, label: &quot;Wall Calf Stretch&quot;, muscle: &quot;Calves&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;,
+  { key: &quot;calf&quot;, label: &quot;Wall Calf Stretch&quot;, muscle: &quot;Calves&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;calf&quot;, complexity: 1,
     levels: [
       { name: &quot;Wall push&quot;, cue: &quot;Hands on the wall, back leg straight, heel pressed down. The straight knee targets the big outer calf muscle.&quot; },
       { name: &quot;Heel off a step&quot;, cue: &quot;Ball of the foot on a step, heel dropping below. More range than the wall gives you.&quot; },
       { name: &quot;Bent-knee drop&quot;, cue: &quot;Same step position, but soften the knee. That shifts it to the deeper soleus underneath — a different muscle, and the one that matters most for running.&quot; },
     ] },
-  { key: &quot;wallPec&quot;, label: &quot;Wall Pec Stretch&quot;, muscle: &quot;Chest / front shoulder&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;A&quot;,
+  { key: &quot;wallPec&quot;, label: &quot;Wall Pec Stretch&quot;, muscle: &quot;Chest / front shoulder&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;A&quot;, region: &quot;chestShoulder&quot;, complexity: 1,
     levels: [
       { name: &quot;Forearm at shoulder height&quot;, cue: &quot;Forearm flat on a doorframe, elbow at shoulder height. Rotate the chest away until you feel it across the front of the shoulder.&quot; },
       { name: &quot;High forearm&quot;, cue: &quot;Same, but slide the elbow above shoulder height. That reaches the lower chest fibers the first version misses.&quot; },
       { name: &quot;Doorway step-through&quot;, cue: &quot;Both forearms on the frame, step one foot through and let the chest open. Go slowly — this one is easy to overdo.&quot; },
     ] },
-  { key: &quot;thoracic&quot;, label: &quot;Open-Book Thoracic Rotation&quot;, muscle: &quot;Mid-back&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;A&quot;,
+  { key: &quot;thoracic&quot;, label: &quot;Open-Book Thoracic Rotation&quot;, muscle: &quot;Mid-back&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;A&quot;, region: &quot;midBack&quot;, complexity: 2,
     levels: [
       { name: &quot;Side-lying open book&quot;, cue: &quot;On your side, knees bent and stacked, arms straight out in front. Open the top arm across your body like turning a page and let the chest follow.&quot; },
       { name: &quot;Exhale into end range&quot;, cue: &quot;Same shape, but at the end of the reach breathe all the way out and let the ribs settle another inch. The exhale is what buys the extra range.&quot; },
       { name: &quot;Thread the needle&quot;, cue: &quot;From hands and knees, slide one arm under the other and rest the shoulder on the floor. Deeper rotation, and it loads the shoulder blade differently.&quot; },
     ] },
-  { key: &quot;childsPose&quot;, label: &quot;Child&#x27;s Pose&quot;, muscle: &quot;Lower back / lats&quot;, holdSeconds: 60, perSide: false, baseRounds: 1, emphasis: &quot;both&quot;,
+  { key: &quot;childsPose&quot;, label: &quot;Child&#x27;s Pose&quot;, muscle: &quot;Lower back / lats&quot;, holdSeconds: 60, perSide: false, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;backLats&quot;, complexity: 1,
     levels: [
       { name: &quot;Standard&quot;, cue: &quot;Knees wide, hips back to the heels, arms long, forehead down. Breathe into the low back.&quot; },
       { name: &quot;Side-bent&quot;, cue: &quot;From the same position, walk both hands to the left and hold, then to the right. Reaches the lat down the side of the ribs rather than just the low back.&quot; },
@@ -191,12 +195,6 @@ const PATTERNS = {
 // estMinutes feeds the session time budget. Explainers are written in, so
 // nothing here needs an API key.
 const EXERCISE_LIBRARY = [
-  {
-    key: &quot;hipThrust&quot;, label: &quot;Hip Thrust (bench)&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 10,
-    sessionType: &quot;B&quot;, patterns: [&quot;hipHinge&quot;], priority: 1, prereq: &quot;legPress&quot;, estMinutes: 7, loadFloor: 25,
-    why: &quot;The biggest hole in your program. Leg press trains the front of the leg; nothing trains the back — glutes and hamstrings. This is the version of that work that&#x27;s safest to learn on your own: your back is supported throughout, and if the weight is too heavy you simply can&#x27;t lift it, rather than being pulled into a bad position under load. Loaded from the start — unloaded on the floor it is a warm-up, not a working set.&quot;,
-    explainer: HIP_THRUST_EXPLAINER,
-  },
   {
     key: &quot;overheadPress&quot;, label: &quot;Overhead Press&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 10, step: 5,
     sessionType: &quot;A&quot;, patterns: [&quot;verticalPush&quot;], priority: 2, prereq: &quot;chestPress&quot;, estMinutes: 7,
@@ -235,8 +233,8 @@ const EXERCISE_LIBRARY = [
   },
   {
     key: &quot;legCurl&quot;, label: &quot;Seated Leg Curl&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 10,
-    sessionType: &quot;B&quot;, patterns: [&quot;hamstringIsolation&quot;], priority: 8, prereq: &quot;hipThrust&quot;, estMinutes: 5,
-    why: &quot;Adds direct hamstring work on top of the hinge pattern. Useful once hip thrusts are established, especially given how tight your hamstrings run.&quot;,
+    sessionType: &quot;B&quot;, patterns: [&quot;hamstringIsolation&quot;], priority: 8, prereq: &quot;backExtension&quot;, estMinutes: 5,
+    why: &quot;Adds direct hamstring work on top of the hinge pattern. Useful once the back extension is established, especially given how tight your hamstrings run.&quot;,
     explainer: &quot;Sit with your back against the pad and the roller just above your heels, legs extended. Curl your heels down and back toward the seat, squeezing the hamstrings at the bottom. Pause, then let the weight rise back under control until your legs are almost straight.\n\nForm cues: keep your hips flat on the seat — if they lift, the weight&#x27;s too heavy. Move only at the knee. Control the return; that&#x27;s where most of the benefit is.&quot;,
   },
   {
@@ -252,10 +250,21 @@ const EXERCISE_LIBRARY = [
     explainer: &quot;Seated or standing, hold a dumbbell with both hands overhead, arms extended. Keeping your upper arms still and close to your ears, bend at the elbows to lower the weight behind your head, then extend back up.\n\nForm cues: only the forearms move — upper arms stay fixed pointing at the ceiling. Elbows in, not flaring. Control the descent. Start light; this isolates a smaller muscle than the machines you&#x27;re used to.&quot;,
   },
   {
-    key: &quot;backExtension&quot;, label: &quot;Back Extension&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 0,
-    noWeight: true, sessionType: &quot;B&quot;, patterns: [&quot;lowBackEndurance&quot;], priority: 11, prereq: &quot;hipThrust&quot;, estMinutes: 5,
-    why: &quot;Builds endurance in the low-back muscles that hold posture all day. Complements the hinge pattern rather than replacing it.&quot;,
-    explainer: &quot;Set the pad just below your hip bones, feet anchored. Start folded forward at the hips, then rise by squeezing your glutes until your body forms a straight line from heels to head. Stop there — don&#x27;t arch past straight. Lower slowly.\n\nForm cues: movement at the hips, not the spine. Bodyweight only until 12 reps is genuinely easy. Do not add weight while the low back is still learning the pattern.&quot;,
+    key: &quot;backExtension&quot;, label: &quot;Back Extension (45°)&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 5,
+    sessionType: &quot;B&quot;, patterns: [&quot;hipHinge&quot;, &quot;lowBackEndurance&quot;], priority: 1, prereq: &quot;legPress&quot;, estMinutes: 5,
+    // Replaced the hip thrust in September 2026. Same job — it is the only thing
+    // here training hip extension, and leg press trains only the front of the leg
+    // — but none of the setup. Brian retired the hip thrust as too awkward, which
+    // it is: a bench to position, a dumbbell to roll into your own hip crease,
+    // padding to sort out, all in the middle of a gym floor. An exercise that
+    // awkward to start is an exercise that gets skipped, and a skipped hinge
+    // trains nothing at all. This one you get into and do.
+    //
+    // Starts at bodyweight rather than loaded, which is the one thing the hip
+    // thrust did better — so `step` is small and the explainer is explicit that
+    // bodyweight is a starting point, not the destination.
+    why: &quot;Covers the biggest hole in your program: leg press trains the front of the leg and nothing trains the back — glutes, hamstrings, low back. Replaces the hip thrust, which does the same job but needs a bench set up and a dumbbell rolled across your hips before you can start. This one you get into and go, which matters more than the small amount of load you give up early on.&quot;,
+    explainer: BACK_EXTENSION_EXPLAINER,
   },
   {
     key: &quot;hipAbduction&quot;, label: &quot;Hip Abduction&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 15, step: 10,
@@ -273,47 +282,117 @@ const EXERCISE_LIBRARY = [
 
 // Stretch candidates that fill areas the base routine leaves untouched.
 const STRETCH_LIBRARY = [
-  { key: &quot;adductor&quot;, label: &quot;Seated Butterfly&quot;, muscle: &quot;Inner thigh / adductors&quot;, holdSeconds: 45, perSide: false, baseRounds: 1, emphasis: &quot;both&quot;, priority: 1,
+  { key: &quot;adductor&quot;, label: &quot;Seated Butterfly&quot;, muscle: &quot;Inner thigh / adductors&quot;, holdSeconds: 45, perSide: false, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;innerThigh&quot;, complexity: 1, priority: 1,
     why: &quot;Nothing in your routine currently stretches the inner thigh. Tight adductors limit hip mobility and are a common contributor to hip and low-back tightness.&quot;,
     levels: [
       { name: &quot;Seated butterfly&quot;, cue: &quot;Soles of the feet together, heels drawn in. Let the knees fall. Sit tall rather than rounding forward.&quot; },
       { name: &quot;Forward fold&quot;, cue: &quot;Same position, hinge forward from the hips with a flat back until you feel it spread across both inner thighs.&quot; },
       { name: &quot;Elbows to shins&quot;, cue: &quot;Fold forward and press the elbows gently down along the shins. Deep — ease into it.&quot; },
     ] },
-  { key: &quot;ankle&quot;, label: &quot;Knee-to-Wall Ankle&quot;, muscle: &quot;Ankle / dorsiflexion&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 2,
+  { key: &quot;ankle&quot;, label: &quot;Knee-to-Wall Ankle&quot;, muscle: &quot;Ankle / dorsiflexion&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;calf&quot;, complexity: 1, priority: 2,
     why: &quot;Ankle range affects your gait and how your knees track under load. Directly relevant given your running volume, and untrained right now.&quot;,
     levels: [
       { name: &quot;Knee to wall&quot;, cue: &quot;Foot a few inches from the wall, drive the knee forward over the toes without the heel lifting.&quot; },
       { name: &quot;Step the foot back&quot;, cue: &quot;Move the foot further from the wall each week. The distance you can hold with the heel down is the measurement.&quot; },
       { name: &quot;Loaded knee to wall&quot;, cue: &quot;Same position with light weight held at the chest, which pushes the range a little further.&quot; },
     ] },
-  { key: &quot;spinalTwist&quot;, label: &quot;Seated Spinal Twist&quot;, muscle: &quot;Spine / obliques&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 3,
+  { key: &quot;spinalTwist&quot;, label: &quot;Seated Spinal Twist&quot;, muscle: &quot;Spine / obliques&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;midBack&quot;, complexity: 2, priority: 3,
     why: &quot;Your routine stretches forward and back but not rotation. Adds the missing plane of motion for the trunk.&quot;,
     levels: [
       { name: &quot;Seated twist&quot;, cue: &quot;Sitting tall, one knee crossed over, opposite elbow outside that knee. Rotate from the mid-back, not the neck.&quot; },
       { name: &quot;Exhale deeper&quot;, cue: &quot;At end range, breathe out fully and let the ribs rotate another inch before you hold.&quot; },
       { name: &quot;Bind the twist&quot;, cue: &quot;Reach the lower arm around the shin and clasp. Considerably more rotation — go gently.&quot; },
     ] },
-  { key: &quot;upperTrap&quot;, label: &quot;Upper Trap / Neck&quot;, muscle: &quot;Neck / upper trap&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 4,
+  { key: &quot;upperTrap&quot;, label: &quot;Upper Trap / Neck&quot;, muscle: &quot;Neck / upper trap&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;neck&quot;, complexity: 1, priority: 4,
     why: &quot;The neck and upper traps take on tension from long stretches of sitting, and pulldowns and rows load them further. Not currently covered.&quot;,
     levels: [
       { name: &quot;Ear to shoulder&quot;, cue: &quot;Tilt the head sideways, opposite shoulder pressed down. No pulling — let the weight of the head do it.&quot; },
       { name: &quot;Anchored&quot;, cue: &quot;Sit on the hand of the side being stretched so the shoulder cannot creep up. Immediately more effective.&quot; },
       { name: &quot;Angled variation&quot;, cue: &quot;Rotate the head about 45 degrees toward the armpit before tilting, which reaches a different band of the muscle.&quot; },
     ] },
-  { key: &quot;sideBend&quot;, label: &quot;Standing Side Bend&quot;, muscle: &quot;Lats / side trunk&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 5,
+  { key: &quot;sideBend&quot;, label: &quot;Standing Side Bend&quot;, muscle: &quot;Lats / side trunk&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, region: &quot;sideTrunk&quot;, complexity: 1, priority: 5,
     why: &quot;Lateral trunk flexibility — the side body between ribs and hip. Complements child&#x27;s pose, which reaches the lats only from the front.&quot;,
     levels: [
       { name: &quot;Standing side bend&quot;, cue: &quot;Arm overhead, lean away. Keep the hips square and do not let them swing out.&quot; },
       { name: &quot;Cross the leg&quot;, cue: &quot;Cross the far leg behind, which anchors the hip and sharpens the stretch up the side.&quot; },
       { name: &quot;Overhead hang&quot;, cue: &quot;Hold a bar overhead with one hand and let the body hang slightly to that side.&quot; },
     ] },
-  { key: &quot;sleeper&quot;, label: &quot;Sleeper Stretch&quot;, muscle: &quot;Shoulder internal rotation&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;A&quot;, priority: 6,
+  { key: &quot;sleeper&quot;, label: &quot;Sleeper Stretch&quot;, muscle: &quot;Shoulder internal rotation&quot;, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;A&quot;, region: &quot;chestShoulder&quot;, complexity: 3, priority: 6,
     why: &quot;Pressing and pulling both tighten the back of the shoulder. This is the standard stretch for restoring that rotation, and becomes more relevant as pressing volume grows.&quot;,
     levels: [
       { name: &quot;Sleeper stretch&quot;, cue: &quot;Lie on the side being stretched, arm out at 90 degrees, elbow bent. Use the other hand to press the forearm gently toward the floor.&quot; },
       { name: &quot;Higher arm angle&quot;, cue: &quot;Move the upper arm slightly above 90 degrees, which shifts the stretch across the back of the shoulder.&quot; },
       { name: &quot;Cross-body add-on&quot;, cue: &quot;Follow the hold with a cross-body reach for 20 seconds to cover both directions.&quot; },
+    ] },
+  { key: &quot;standingHipFlexor&quot;, label: &quot;Standing Hip Flexor&quot;, muscle: &quot;Hip flexors&quot;, region: &quot;hipFront&quot;, complexity: 1, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 7,
+    why: &quot;Everything the half-kneeling lunge does, done standing. No getting down on the floor, no knee on a hard surface, and far easier to find the position that actually stretches rather than one that just feels like a lunge.&quot;,
+    levels: [
+      { name: &quot;Split stance, tuck&quot;, cue: &quot;Stand with one foot well behind the other, both feet facing forward. Tuck your tailbone under and squeeze the back glute. That squeeze is the whole stretch \u2014 you should feel it high in the front of the back thigh without leaning anywhere.&quot; },
+      { name: &quot;Add the lean&quot;, cue: &quot;Same position, same tuck, then press the hips forward an inch. Do not arch the low back to get further; the tuck has to hold.&quot; },
+      { name: &quot;Overhead reach&quot;, cue: &quot;Hold the position and reach the same-side arm overhead, leaning slightly away. Reaches up into the hip flexor where it crosses the pelvis.&quot; },
+    ] },
+  { key: &quot;supineHamstring&quot;, label: &quot;Lying Hamstring (towel)&quot;, muscle: &quot;Hamstrings&quot;, region: &quot;hamstrings&quot;, complexity: 1, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 8,
+    why: &quot;The version of the hamstring stretch that is hardest to do wrong. Lying down takes the low back out of it entirely, so you cannot fake range by rounding forward the way you can seated or standing.&quot;,
+    levels: [
+      { name: &quot;Towel around the foot&quot;, cue: &quot;On your back, loop a towel or strap around one foot. Other leg bent, foot flat. Raise the looped leg with the knee straight until you feel the hamstring, and hold there.&quot; },
+      { name: &quot;Straighten the other leg&quot;, cue: &quot;Same, but extend the resting leg flat along the floor. That stops the pelvis tilting and makes the same height noticeably stronger.&quot; },
+      { name: &quot;Pull to the end&quot;, cue: &quot;Draw the leg closer with the towel and add a gentle pull of the toes toward you. Stop immediately if anything feels sharp or electric rather than like a stretch.&quot; },
+    ] },
+  { key: &quot;standingFigureFour&quot;, label: &quot;Standing Figure-Four&quot;, muscle: &quot;Glutes&quot;, region: &quot;glutes&quot;, complexity: 1, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 9,
+    why: &quot;The glute stretch without lying on the floor or folding into a pigeon. Hold a rack or a bench for balance and it becomes one of the simplest positions in the routine.&quot;,
+    levels: [
+      { name: &quot;Hands on a bench&quot;, cue: &quot;Stand, cross one ankle over the opposite knee, hold a bench or rack, and sit back as if lowering into a chair until you feel it in the glute of the crossed leg.&quot; },
+      { name: &quot;Sit back further&quot;, cue: &quot;Same shape, more knee bend on the standing leg. Chest stays up \u2014 if you are folding forward, the stretch has moved to your back.&quot; },
+      { name: &quot;Hands free&quot;, cue: &quot;The same position without holding on. Adds a balance demand on the standing leg, which is worth having.&quot; },
+    ] },
+  { key: &quot;seatedCalf&quot;, label: &quot;Seated Calf (towel)&quot;, muscle: &quot;Calves&quot;, region: &quot;calf&quot;, complexity: 1, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 10,
+    why: &quot;Same muscle as the wall calf stretch with nothing to line up. Useful on days when the wall version feels like more setup than it is worth.&quot;,
+    levels: [
+      { name: &quot;Towel pull&quot;, cue: &quot;Sit with one leg straight out, towel looped around the ball of the foot. Pull the toes back toward you with the knee straight.&quot; },
+      { name: &quot;Hold longer, pull less&quot;, cue: &quot;Ease the pull slightly and hold twice as long. Calves respond better to time than to force.&quot; },
+      { name: &quot;Bend the knee&quot;, cue: &quot;Soften the knee and pull again. That shifts it to the deeper soleus underneath, which is the one that matters for running.&quot; },
+    ] },
+  { key: &quot;kneesToChest&quot;, label: &quot;Knees to Chest&quot;, muscle: &quot;Lower back&quot;, region: &quot;backLats&quot;, complexity: 1, holdSeconds: 60, perSide: false, baseRounds: 1, emphasis: &quot;both&quot;, priority: 11,
+    why: &quot;Child&#x27;s pose without the kneeling. Reaches the same low back, and for most people it is more comfortable to stay in long enough to matter.&quot;,
+    levels: [
+      { name: &quot;Both knees&quot;, cue: &quot;On your back, draw both knees toward your chest and hold them there with your arms. Let the low back round and settle into the floor.&quot; },
+      { name: &quot;Rock slowly&quot;, cue: &quot;Same position, rocking gently side to side an inch or two. Massages either side of the spine rather than holding one spot.&quot; },
+      { name: &quot;One knee at a time&quot;, cue: &quot;Hold one knee in, the other leg flat on the floor. Stronger on the held side and it opens the front of the straight leg&#x27;s hip at the same time.&quot; },
+    ] },
+  { key: &quot;behindBackClasp&quot;, label: &quot;Behind-the-Back Clasp&quot;, muscle: &quot;Chest / front shoulder&quot;, region: &quot;chestShoulder&quot;, complexity: 1, holdSeconds: 30, perSide: false, baseRounds: 1, emphasis: &quot;both&quot;, priority: 12,
+    why: &quot;Opens the chest with no doorframe to find and no arm angle to get right. Both sides at once, which also halves the time.&quot;,
+    levels: [
+      { name: &quot;Clasp and lift&quot;, cue: &quot;Stand, clasp your hands behind your back, straighten the arms and lift them away from you. Chest opens, shoulders roll back.&quot; },
+      { name: &quot;Chin tucked&quot;, cue: &quot;Same, but tuck your chin and keep the ribs down so the stretch stays in the chest instead of becoming a low-back arch.&quot; },
+      { name: &quot;Hinge forward&quot;, cue: &quot;Hold the clasp and hinge forward at the hips, letting the arms travel overhead. Considerably stronger \u2014 go slowly.&quot; },
+    ] },
+  { key: &quot;chairRotation&quot;, label: &quot;Seated Chair Rotation&quot;, muscle: &quot;Mid-back&quot;, region: &quot;midBack&quot;, complexity: 1, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 13,
+    why: &quot;Mid-back rotation without lying down or stacking your knees. Sitting gives the pelvis something to anchor against, which is most of what makes the open-book version tricky.&quot;,
+    levels: [
+      { name: &quot;Hands on the back of the chair&quot;, cue: &quot;Sit sideways on a bench or chair, feet flat and knees pointing forward. Hold the backrest and rotate your ribs toward it, keeping the knees where they started.&quot; },
+      { name: &quot;Exhale into it&quot;, cue: &quot;At the end of the turn, breathe all the way out and let the ribs rotate a little further before you hold.&quot; },
+      { name: &quot;Lead with the eyes&quot;, cue: &quot;Same, but turn your head last and look past your shoulder. Adds the neck and upper spine to the rotation.&quot; },
+    ] },
+  { key: &quot;wideStanceAdductor&quot;, label: &quot;Standing Inner Thigh&quot;, muscle: &quot;Inner thigh / adductors&quot;, region: &quot;innerThigh&quot;, complexity: 1, holdSeconds: 45, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 14,
+    why: &quot;Inner thigh without sitting on the floor. Easier to control how far you go than the butterfly, where the range is whatever your hips happen to allow.&quot;,
+    levels: [
+      { name: &quot;Side lunge&quot;, cue: &quot;Feet wide, toes forward. Bend one knee and shift your weight over it, keeping the other leg straight. You will feel it along the inside of the straight leg.&quot; },
+      { name: &quot;Sit back as you shift&quot;, cue: &quot;Same, but push the hips back as you shift rather than letting the bent knee travel forward. Stronger, and kinder to the knee.&quot; },
+      { name: &quot;Hands to the floor&quot;, cue: &quot;From the deepest position, rest your hands on the floor or a block in front of you and let the hips sink.&quot; },
+    ] },
+  { key: &quot;levatorNeck&quot;, label: &quot;Levator / Neck Corner&quot;, muscle: &quot;Neck / upper trap&quot;, region: &quot;neck&quot;, complexity: 1, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 15,
+    why: &quot;Reaches the band of neck muscle the ear-to-shoulder version misses \u2014 the one that runs from the neck to the shoulder blade and carries most of the tension from long stretches of sitting.&quot;,
+    levels: [
+      { name: &quot;Look into the armpit&quot;, cue: &quot;Turn your head about 45 degrees to one side, then tilt your chin down toward that armpit. Opposite shoulder stays pressed down.&quot; },
+      { name: &quot;Anchor the shoulder&quot;, cue: &quot;Sit on the hand of the side being stretched, or hold the edge of the seat, so the shoulder cannot rise to meet your head.&quot; },
+      { name: &quot;Hand on the head&quot;, cue: &quot;Rest the opposite hand on the back of your head and let its weight do the work. No pulling.&quot; },
+    ] },
+  { key: &quot;seatedSideReach&quot;, label: &quot;Seated Side Reach&quot;, muscle: &quot;Lats / side trunk&quot;, region: &quot;sideTrunk&quot;, complexity: 1, holdSeconds: 30, perSide: true, baseRounds: 1, emphasis: &quot;both&quot;, priority: 16,
+    why: &quot;The side-body stretch done sitting, where the hips are already anchored. The standing version quietly turns into a hip swing unless you watch it.&quot;,
+    levels: [
+      { name: &quot;Reach overhead&quot;, cue: &quot;Sit tall, reach one arm overhead and lean away from it. Both sit bones stay down on the bench.&quot; },
+      { name: &quot;Anchor the opposite hand&quot;, cue: &quot;Hold the edge of the bench with the other hand and reach against that anchor. Immediately sharper up the side of the ribs.&quot; },
+      { name: &quot;Add rotation&quot;, cue: &quot;At the end of the reach, turn your chest slightly up toward the ceiling. Reaches further round into the lat.&quot; },
     ] },
 ];
 
@@ -544,7 +623,19 @@ function mergeStretches(stored) {
   const byKey = new Map(stored.map((s) =&gt; [s.key, s]));
   const merged = STRETCHES.map((base) =&gt; ({ ...base, ...(byKey.get(base.key) || {}) }));
   const baseKeys = new Set(STRETCHES.map((s) =&gt; s.key));
-  stored.forEach((s) =&gt; { if (!baseKeys.has(s.key)) merged.push(s); });
+  // A stretch added from the library months ago was written to storage with
+  // whatever fields existed that day, so a field added to the code since then
+  // never reaches it. That is not cosmetic: `region` arrived after these were
+  // saved, and without it a stretch has nothing to be swapped for and silently
+  // drops instead. So library entries are merged over their current definition
+  // rather than taken verbatim, with stored values still winning wherever both
+  // have one.
+  const libByKey = new Map(STRETCH_LIBRARY.map((s) =&gt; [s.key, s]));
+  stored.forEach((s) =&gt; {
+    if (baseKeys.has(s.key)) return;
+    const lib = libByKey.get(s.key);
+    merged.push(lib ? { ...lib, ...s } : s);
+  });
   return merged;
 }
 function mergeExercises(stored) {
@@ -566,6 +657,28 @@ function migrateExercises(exercises) {
   const ht = out.hipThrust;
   if (ht &amp;&amp; ht.loadFloor == null) {
     out.hipThrust = { ...ht, label: &quot;Hip Thrust (bench)&quot;, loadFloor: 25, explainer: HIP_THRUST_EXPLAINER };
+  }
+  // Retired September 2026 as too awkward to be worth doing. Deactivated rather
+  // than deleted: sessions already logged against it keep rendering, and the
+  // weights he worked up to stay on the record. `retiredAt` is what stops the
+  // migration running twice and reviving it if he ever turns it back on.
+  if (out.hipThrust &amp;&amp; out.hipThrust.active !== false &amp;&amp; !out.hipThrust.retiredAt) {
+    out.hipThrust = { ...out.hipThrust, active: false, retiredAt: &quot;2026-09-20&quot; };
+  }
+  // The back extension inherits the hinge. An earlier version of it may already
+  // be configured as a bodyweight-only low-back exercise, so the fields that
+  // changed are pushed onto it; its logged weight and reps are left alone.
+  const be = out.backExtension;
+  if (be &amp;&amp; be.noWeight) {
+    const { noWeight, ...rest } = be;
+    out.backExtension = {
+      ...rest,
+      label: &quot;Back Extension (45°)&quot;,
+      unit: &quot;lb&quot;,
+      step: 5,
+      patterns: [&quot;hipHinge&quot;, &quot;lowBackEndurance&quot;],
+      explainer: BACK_EXTENSION_EXPLAINER,
+    };
   }
   return out;
 }
@@ -683,7 +796,6 @@ async function loadState() {
 }
 async function saveSessions(sessions) { lsSet(&quot;sessions&quot;, JSON.stringify(sessions)); }
 async function savePlan(plan) { lsSet(&quot;plan&quot;, JSON.stringify(plan)); }
-async function savePractice(entries) { lsSet(&quot;practice-entries&quot;, JSON.stringify(entries)); }
 async function saveExercises(exercises) { lsSet(&quot;exercises-config&quot;, JSON.stringify(exercises)); }
 async function saveStretches(stretches) { lsSet(&quot;stretches-config&quot;, JSON.stringify(stretches)); }
 async function saveRecipes(recipes) { lsSet(&quot;recipes-config&quot;, JSON.stringify(recipes)); }
@@ -921,8 +1033,85 @@ function stretchesForSession(sessionType, allStretches = STRETCHES) {
 // they come round almost every time. The remaining slots rotate: whichever of
 // the rest is most overdue, with a nudge toward whatever this session trained,
 // since a static stretch does most for a muscle that has just been worked.
-const STRETCH_SESSION_CAP = 5;
+// Four: three anchors plus one rotating. An earlier reading of &quot;max of six&quot; as a
+// request rather than as approval of having a ceiling briefly pushed this to 6,
+// which was backwards — Brian wants the tail of holds at the end of a workout
+// shorter, because that is the part that gets skipped.
+//
+// The cost of a small cap is rotation. One rotating slot against a pool of
+// fourteen means a non-anchor comes round about once every nine sessions, which
+// is both too rare to produce any range gain and too rare to ever get familiar
+// with. That second part is probably why some stretches still feel complex and
+// wrong: they are being met cold every time. The lever for that is a smaller
+// pool, not a bigger cap — see the drop-versus-swap distinction in the wizard.
+const STRETCH_SESSION_CAP = 4;
 const STRETCH_ANCHORS = [&quot;hipFlexor&quot;, &quot;hamstring&quot;, &quot;calf&quot;];
+
+// Anchors are named by key rather than by region, because region over-matches:
+// the quad stretch shares hipFront with the hip flexor lunge, and anchoring both
+// would fill a whole Session B and leave nothing rotating at all. The
+// consequence is that a retired anchor would stop being one, so its replacement
+// inherits the role explicitly — see retireStretch.
+function isStretchAnchor(s) {
+  return STRETCH_ANCHORS.indexOf(s.key) !== -1 || s.anchor === true;
+}
+
+// Retiring a stretch is a swap, not a deletion. The failure mode this exists for
+// is bailing on a stretch that is fiddly to learn and never feels right; a
+// routine that simply gets shorter every time that happens stops covering the
+// body, one region at a time, without ever announcing that it has. So the slot
+// is refilled: the simplest unused stretch covering the same region takes it.
+//
+// Sorted on complexity first and priority second, so a replacement is never
+// harder to learn than what it replaced. Every region in the routine has at
+// least one complexity-1 option, which is what makes that promise keepable.
+function replacementFor(list, region, excludeKey) {
+  const activeKeys = new Set(list.filter((s) =&gt; s.active !== false).map((s) =&gt; s.key));
+  const retiredKeys = new Set(list.filter((s) =&gt; s.retiredAt).map((s) =&gt; s.key));
+  const known = STRETCHES.concat(STRETCH_LIBRARY);
+  const seen = new Set();
+  return known
+    .filter((c) =&gt; {
+      if (c.region !== region || c.key === excludeKey) return false;
+      if (activeKeys.has(c.key) || retiredKeys.has(c.key)) return false;
+      if (seen.has(c.key)) return false;
+      seen.add(c.key);
+      return true;
+    })
+    .sort((a, b) =&gt; (a.complexity || 2) - (b.complexity || 2) || (a.priority || 99) - (b.priority || 99))[0] || null;
+}
+
+// Returns the new list and whichever stretch took the slot, so the caller can
+// say what happened. A retired stretch keeps its entry rather than being spliced
+// out: that is what stops the expansion suggester offering it back next week,
+// and it is what makes bringing it back a one-tap change of mind.
+function retireStretch(list, key, dateStr, options) {
+  const target = list.find((s) =&gt; s.key === key);
+  if (!target) return { next: list, replacement: null };
+  // Two different intentions, and conflating them was a mistake. &quot;This stretch
+  // is wrong for me&quot; wants a swap: something simpler covering the same area, so
+  // the body still gets covered. &quot;I want less&quot; wants a drop: the slot closes and
+  // the routine is genuinely shorter. Always swapping made the second impossible.
+  const replacement = options &amp;&amp; options.drop === true
+    ? null
+    : replacementFor(list, target.region, key);
+  let next = list.map((s) =&gt; (s.key === key ? { ...s, active: false, retiredAt: dateStr } : s));
+  if (replacement) {
+    // Hip flexors, hamstrings and calves are trained every session on purpose.
+    // If one of those is what went, its stand-in takes the anchor slot rather
+    // than dropping into a rotation that would surface it once a fortnight.
+    const inherits = isStretchAnchor(target);
+    const merged = inherits ? { ...replacement, anchor: true } : replacement;
+    next = next.some((s) =&gt; s.key === replacement.key)
+      ? next.map((s) =&gt; (s.key === replacement.key ? { ...s, ...merged, active: true, retiredAt: undefined } : s))
+      : next.concat([{ ...merged, active: true, addedAt: dateStr }]);
+  }
+  return { next, replacement };
+}
+
+function unretireStretch(list, key) {
+  return list.map((s) =&gt; (s.key === key ? { ...s, active: true, retiredAt: undefined } : s));
+}
 
 function daysSinceStretched(sessions, key) {
   const done = sessions.filter((s) =&gt; normalizeStretchRounds((s.stretchRounds || {})[key], null) &gt; 0);
@@ -939,8 +1128,8 @@ function daysSinceStretched(sessions, key) {
 function selectSessionStretches(sessionType, allStretches = STRETCHES, sessions = [], cap = STRETCH_SESSION_CAP) {
   const pool = stretchesForSession(sessionType, allStretches);
   if (pool.length &lt;= cap) return pool;
-  const anchors = pool.filter((s) =&gt; STRETCH_ANCHORS.indexOf(s.key) !== -1);
-  const rest = pool.filter((s) =&gt; STRETCH_ANCHORS.indexOf(s.key) === -1);
+  const anchors = pool.filter(isStretchAnchor);
+  const rest = pool.filter((s) =&gt; !isStretchAnchor(s));
   const slots = Math.max(0, cap - anchors.length);
   const scored = rest
     .map((s) =&gt; ({ s, stale: daysSinceStretched(sessions, s.key), matched: s.emphasis === sessionType ? 6 : 0 }))
@@ -1410,8 +1599,12 @@ function suggestStretchExpansion(sessions, activeStretches) {
   }
 
   const activeKeys = new Set(activeStretches.map((s) =&gt; s.key));
+  // Anything retired stays retired. Offering it back as a fresh suggestion a
+  // fortnight later is how a routine quietly refills with the stretches that
+  // were not working in the first place.
+  const retiredKeys = new Set(activeStretches.filter((s) =&gt; s.retiredAt).map((s) =&gt; s.key));
   const candidates = STRETCH_LIBRARY
-    .filter((c) =&gt; !activeKeys.has(c.key))
+    .filter((c) =&gt; !activeKeys.has(c.key) &amp;&amp; !retiredKeys.has(c.key))
     .sort((a, b) =&gt; a.priority - b.priority);
 
   if (candidates.length === 0) {
@@ -1843,7 +2036,10 @@ const annotationStyle = {
 };
 
 // ---------- log wizard ----------
-function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, onCancel, onComplete }) {
+function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, onCancel, onComplete, onRetireStretch }) {
+  // Set when a stretch is retired mid-log, so the swap is reported in place
+  // rather than as a toast that has gone by the time he looks up.
+  const [retireNote, setRetireNote] = useState(null);
   const [step, setStep] = useState(initialDraft &amp;&amp; Number.isFinite(initialDraft.step) ? initialDraft.step : 0);
   const [modality, setModality] = useState((initialDraft &amp;&amp; initialDraft.entry &amp;&amp; initialDraft.entry.modality) || &quot;treadmill&quot;);
   const modalityCfg = MODALITIES.find((m) =&gt; m.key === modality) || MODALITIES[0];
@@ -2086,11 +2282,19 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
             fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
             background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
           }}&gt;
-            Coach: rounds build toward roughly {STRETCH_TARGET_ACCUM}s total per muscle group — the point where added time stops paying off. Log the rounds you actually did.
+            Coach: rounds build toward roughly {STRETCH_TARGET_ACCUM}s total per muscle group — the point where added time stops paying off. Log the rounds you actually did. Mark one zero and two options appear: swap it for something simpler covering the same area, or drop it and make the routine shorter.
             {stretchPool.length &gt; sessionStretches.length &amp;&amp; (
               &lt;&gt; {&quot; &quot;}{sessionStretches.length} of your {stretchPool.length} tonight: hip flexors, hamstrings and calves every session, the rest rotating in by whichever is most overdue.&lt;/&gt;
             )}
           &lt;/div&gt;
+          {retireNote &amp;&amp; (
+            &lt;div style={{
+              fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6,
+              background: &quot;#F4E4D4&quot;, border: &quot;2px solid #BE3B2A&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginTop: 8,
+            }}&gt;
+              {retireNote}
+            &lt;/div&gt;
+          )}
           &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 14 }}&gt;
             {sessionStretches.map((s) =&gt; {
               const rec = getStretchRecommendation(sessions, s);
@@ -2106,7 +2310,7 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                   &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, marginTop: 2, lineHeight: 1.5 }}&gt;
                     {s.muscle} · {rec.rationale}
                   &lt;/div&gt;
-                  &lt;div style={{ display: &quot;flex&quot;, gap: 6, marginTop: 8, flexWrap: &quot;wrap&quot; }}&gt;
+                  &lt;div style={{ display: &quot;flex&quot;, gap: 6, marginTop: 8, flexWrap: &quot;wrap&quot;, alignItems: &quot;center&quot; }}&gt;
                     {[0, 1, 2, 3].map((r) =&gt; (
                       &lt;button key={r} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, stretchRounds: { ...e.stretchRounds, [s.key]: r } }))}
                         style={{
@@ -2117,6 +2321,40 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                           color: val === r ? &quot;#F9F6EE&quot; : &quot;#1B1B1B&quot;,
                         }}&gt;{r === 0 ? &quot;skipped&quot; : `${r} round${r === 1 ? &quot;&quot; : &quot;s&quot;}`}&lt;/button&gt;
                     ))}
+                    {val === 0 &amp;&amp; onRetireStretch &amp;&amp; (
+                      &lt;&gt;
+                        &lt;button
+                          onClick={() =&gt; {
+                            const res = onRetireStretch(s.key, { drop: false });
+                            setRetireNote(
+                              res &amp;&amp; res.replacement
+                                ? `${s.label} swapped for ${res.replacement.label}, from your next session.`
+                                : `${s.label} dropped. Nothing simpler covers that area, so the slot just closes.`
+                            );
+                          }}
+                          style={{
+                            padding: &quot;6px 10px&quot;, borderRadius: 0, fontSize: 11.5, cursor: &quot;pointer&quot;,
+                            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, marginLeft: 4,
+                            border: &quot;1.5px dashed #6E6759&quot;, background: &quot;#F9F6EE&quot;, color: &quot;#6E6759&quot;,
+                          }}
+                        &gt;
+                          Swap it
+                        &lt;/button&gt;
+                        &lt;button
+                          onClick={() =&gt; {
+                            onRetireStretch(s.key, { drop: true });
+                            setRetireNote(`${s.label} dropped. Your routine is one shorter — nothing replaces it.`);
+                          }}
+                          style={{
+                            padding: &quot;6px 10px&quot;, borderRadius: 0, fontSize: 11.5, cursor: &quot;pointer&quot;,
+                            fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;,
+                            border: &quot;1.5px dashed #BE3B2A&quot;, background: &quot;#F9F6EE&quot;, color: &quot;#BE3B2A&quot;,
+                          }}
+                        &gt;
+                          Drop it
+                        &lt;/button&gt;
+                      &lt;/&gt;
+                    )}
                   &lt;/div&gt;
                 &lt;/div&gt;
               );
@@ -2571,138 +2809,6 @@ function practiceReadout(p) {
   return parts.join(&quot; · &quot;);
 }
 
-// The reflection frame. Terms only, fixed, never rotating. Naming the five
-// hindrances and the seven awakening factors is the tradition&#x27;s own vocabulary
-// rather than prose this app composed, so it sits inside the direct-quotation
-// rule rather than around it. It replaces the two chip rows that used to stand
-// here \u2014 energy and attitude of the observing mind \u2014 which asked for one
-// reading to cover thirty minutes in which a great deal happens, and so were
-// answered &quot;unclear&quot; or &quot;all of them&quot; nearly every time. Worse, they were an
-// in-sit question borrowed from Sayadaw U Tejaniya, whose whole use is to be
-// asked repeatedly during practice as a way of re-orienting; turned into a
-// summary field afterwards it stopped being that and became a small score.
-// A list of names asks nothing and records nothing. It is there to be glanced
-// at on the days it is wanted and ignored on the days it is not.
-const HINDRANCES = [&quot;Sensory desire&quot;, &quot;Ill will&quot;, &quot;Sloth \u0026 torpor&quot;, &quot;Restlessness \u0026 worry&quot;, &quot;Doubt&quot;];
-const AWAKENING_FACTORS = [&quot;Mindfulness&quot;, &quot;Investigation&quot;, &quot;Energy&quot;, &quot;Rapture&quot;, &quot;Tranquility&quot;, &quot;Concentration&quot;, &quot;Equanimity&quot;];
-
-function ReflectionFrame() {
-  const row = (label, items, key) =&gt; (
-    &lt;div key={key} style={{ marginTop: key === &quot;h&quot; ? 0 : 9 }}&gt;
-      &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 9.5, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;
-        {label}
-      &lt;/div&gt;
-      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#1B1B1B&quot;, lineHeight: 1.55, marginTop: 3 }}&gt;
-        {items.join(&quot;  \u00B7  &quot;)}
-      &lt;/div&gt;
-    &lt;/div&gt;
-  );
-  return (
-    &lt;div style={{ border: &quot;2px solid #D8D0BF&quot;, background: &quot;#EFE9DC&quot;, padding: &quot;10px 12px&quot;, marginTop: 12 }}&gt;
-      {row(&quot;Hindrances&quot;, HINDRANCES, &quot;h&quot;)}
-      {row(&quot;Awakening factors&quot;, AWAKENING_FACTORS, &quot;a&quot;)}
-    &lt;/div&gt;
-  );
-}
-
-function PracticeWizard({ onCancel, onComplete }) {
-  const [step, setStep] = useState(0);
-  const [entry, setEntry] = useState({
-    date: localDateStr(),
-    type: null, duration: 15, journal: &quot;&quot;,
-  });
-  // The mind step is gone; nothing replaced it. Type, duration, whatever is
-  // worth writing down, save.
-  const steps = [&quot;type&quot;, &quot;duration&quot;, &quot;journal&quot;, &quot;review&quot;];
-  const total = steps.length;
-  const current = steps[step];
-  const next = () =&gt; setStep((s) =&gt; Math.min(total - 1, s + 1));
-  const back = () =&gt; setStep((s) =&gt; Math.max(0, s - 1));
-  const finish = () =&gt; onComplete({ id: uid(), ...entry });
-
-  return (
-    &lt;div style={{ maxWidth: 480, margin: &quot;0 auto&quot; }}&gt;
-      &lt;StepDots step={step} total={total} /&gt;
-
-      {current === &quot;type&quot; &amp;&amp; (
-        &lt;Card title=&quot;Practice&quot; sub=&quot;What kind of sit was it?&quot;&gt;
-          &lt;Field label=&quot;Date&quot;&gt;
-            &lt;div style={{ display: &quot;flex&quot;, gap: 8, justifyContent: &quot;center&quot;, flexWrap: &quot;wrap&quot;, marginBottom: 10 }}&gt;
-              {[0, 1, 2].map((back) =&gt; {
-                const d = new Date(); d.setDate(d.getDate() - back);
-                const ds = localDateStr(d);
-                return (
-                  &lt;Chip key={back} active={entry.date === ds} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, date: ds }))}&gt;
-                    {back === 0 ? &quot;Today&quot; : back === 1 ? &quot;Yesterday&quot; : &quot;2 days ago&quot;}
-                  &lt;/Chip&gt;
-                );
-              })}
-            &lt;/div&gt;
-            &lt;input
-              type=&quot;date&quot;
-              value={entry.date}
-              max={localDateStr()}
-              onChange={(e) =&gt; e.target.value &amp;&amp; setEntry((prev) =&gt; ({ ...prev, date: e.target.value }))}
-              style={{
-                width: &quot;100%&quot;, border: &quot;2px solid #1B1B1B&quot;, padding: &quot;10px 12px&quot;,
-                fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 14, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;,
-              }}
-            /&gt;
-          &lt;/Field&gt;
-          &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
-            {MEDITATION_TYPES.map((t) =&gt; (
-              &lt;Chip key={t.key} active={entry.type === t.key} onClick={() =&gt; setEntry((e) =&gt; ({ ...e, type: t.key }))}&gt;{t.label}&lt;/Chip&gt;
-            ))}
-          &lt;/div&gt;
-        &lt;/Card&gt;
-      )}
-
-      {current === &quot;duration&quot; &amp;&amp; (
-        &lt;Card title=&quot;Duration&quot; sub=&quot;How long did you sit?&quot;&gt;
-          &lt;Stepper value={entry.duration} step={5} unit=&quot;min&quot; min={1} onChange={(v) =&gt; setEntry((e) =&gt; ({ ...e, duration: v }))} /&gt;
-        &lt;/Card&gt;
-      )}
-
-      {current === &quot;journal&quot; &amp;&amp; (
-        &lt;Card title=&quot;Journal&quot; sub=&quot;Optional — whatever&#x27;s worth writing down&quot;&gt;
-          &lt;JournalPassage /&gt;
-          &lt;textarea
-            value={entry.journal}
-            onChange={(ev) =&gt; setEntry((e) =&gt; ({ ...e, journal: ev.target.value }))}
-            placeholder=&quot;What came up, what you noticed, anything on your mind…&quot;
-            style={{
-              width: &quot;100%&quot;, minHeight: 140, borderRadius: 0, border: &quot;2px solid #1B1B1B&quot;,
-              padding: 12, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 14, resize: &quot;vertical&quot;,
-              background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;, lineHeight: 1.6,
-            }}
-          /&gt;
-          &lt;ReflectionFrame /&gt;
-        &lt;/Card&gt;
-      )}
-
-      {current === &quot;review&quot; &amp;&amp; (
-        &lt;Card title=&quot;Review &amp; save&quot;&gt;
-          &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 13, color: &quot;#1B1B1B&quot;, lineHeight: 1.9 }}&gt;
-            &lt;div&gt;{MEDITATION_TYPES.find((t) =&gt; t.key === entry.type)?.label || &quot;No type set&quot;} · {entry.duration} min&lt;/div&gt;
-            {entry.journal &amp;&amp; &lt;div style={{ marginTop: 8, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontStyle: &quot;italic&quot; }}&gt;&quot;{entry.journal.slice(0, 120)}{entry.journal.length &gt; 120 ? &quot;…&quot; : &quot;&quot;}&quot;&lt;/div&gt;}
-          &lt;/div&gt;
-        &lt;/Card&gt;
-      )}
-
-      &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, marginTop: 22 }}&gt;
-        &lt;button style={btnGhost} onClick={step === 0 ? onCancel : back}&gt;
-          &lt;ChevronLeft size={16} /&gt; {step === 0 ? &quot;Cancel&quot; : &quot;Back&quot;}
-        &lt;/button&gt;
-        {current === &quot;review&quot; ? (
-          &lt;button style={btnPrimary} onClick={finish}&gt;&lt;Check size={16} /&gt; Save entry&lt;/button&gt;
-        ) : (
-          &lt;button style={btnPrimary} onClick={next}&gt;Next &lt;ChevronRight size={16} /&gt;&lt;/button&gt;
-        )}
-      &lt;/div&gt;
-    &lt;/div&gt;
-  );
-}
-
 // ---------- the day&#x27;s passage ----------
 // There used to be a library of pointers written here, in the app&#x27;s own voice,
 // with sources reading &quot;after SN 46.53&quot; or &quot;after Sayadaw U Tejaniya&quot;. Those
@@ -2956,8 +3062,8 @@ const TEACHINGS_KEY = &quot;teachings&quot;;
 // every other feature shares.
 const TEACHING_CHAR_CAP = 80000;
 
-// Pool functions are called from components scattered across the tree \u2014 the
-// Practice tab, the reflection box inside the log, the sila band \u2014 and
+// Pool functions are called from components scattered across the tree — the
+// Practice tab, the reflection box inside the log, the sila band — and
 // threading a teachings prop through all of them would mean touching every
 // component in between. The list is mirrored here instead and refreshed
 // whenever the state that owns it changes, so a re-render always reads current
@@ -3063,7 +3169,7 @@ function collectStrings(node, out, depth) {
 
 // Letters and digits only, accents folded off. Two texts differing solely in
 // quotation marks, spacing, line breaks, dashes or diacritics compare equal;
-// two differing by a single word do not. Pali diacritics matter here \u2014 a
+// two differing by a single word do not. Pali diacritics matter here — a
 // reader that renders sati-sampaja\u00f1\u00f1a as sati-sampajanna has still copied
 // the passage, and should not be refused for it.
 function verbatimKey(str) {
@@ -3073,7 +3179,7 @@ function verbatimKey(str) {
 }
 
 // The text that actually came off the page, as one comparable string. A page
-// that returns JSON \u2014 SuttaCentral&#x27;s text API does \u2014 arrives with the teaching
+// that returns JSON — SuttaCentral&#x27;s text API does — arrives with the teaching
 // split across values and segment ids sitting between them, so the raw body is
 // not a haystack the rebuilt prose can be found in. Its values get joined and
 // added alongside the raw text rather than replacing it.
@@ -3215,7 +3321,7 @@ async function fetchTeaching(url) {
     if (typeof s.precept === &quot;number&quot; &amp;&amp; s.precept &gt;= 0 &amp;&amp; s.precept &lt;= 5) seg.precept = s.precept;
     segments.push(seg);
   }
-  // One or two casualties are ordinary \u2014 a reader that silently fixed a typo or
+  // One or two casualties are ordinary — a reader that silently fixed a typo or
   // joined a hyphenated line break. Losing more than it kept means it was
   // rewriting rather than copying, and none of it can be trusted.
   if (dropped &gt; segments.length) throw new Error(&quot;paraphrased&quot;);
@@ -3441,192 +3547,93 @@ function PassageSource({ passage, size = 11 }) {
   );
 }
 
-// The card on the Practice tab. One passage, the same one the reflection box
-// will show later, so what was read before sitting is what is still in view
-// afterwards. With an empty library it says what it is rather than hiding.
-function DailyPassage() {
-  const [, bump] = useState(0);
-  const p = dailyPassageFor(localDateStr(), passageOffset());
-  const shell = { background: &quot;#F9F6EE&quot;, border: &quot;2.5px solid #1B1B1B&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, borderRadius: 0, padding: &quot;16px 18px&quot; };
+// The sit log was removed in September 2026. Brian&#x27;s account: logging the sit
+// was a burden he could not afford, and having one more thing to attend to was
+// itself hindering the practice. That is the same conclusion the rest of this
+// app&#x27;s practice design kept arriving at from the other direction — no streak,
+// no score, nothing to protect — followed all the way down. Nothing prompts a
+// sit any more, nothing asks how it went, and no count of sits appears anywhere.
+//
+// What survives is deliberately small. The sila band stays on Today, because he
+// asked for it to. Two months of journal entries stay readable here rather than
+// only inside an export file, because removing the logging is not a reason to
+// make what he already wrote unreachable. It is collapsed, it is on the Plan
+// tab behind a tap, and it cannot be added to.
+function PracticeArchive({ practice }) {
+  const [open, setOpen] = useState(false);
+  if (!practice || practice.length === 0) return null;
 
-  if (!p) {
-    return (
-      &lt;div style={shell}&gt;
-        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;Today&lt;/div&gt;
-        &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 14, lineHeight: 1.65, color: &quot;#6E6759&quot;, marginTop: 10 }}&gt;
-          Nothing in the library yet. Everything shown here is a teacher&#x27;s own words, taken from a page and checked against it \u2014 so until a teaching is imported, this stays empty. Add one under Teachings below.
-        &lt;/div&gt;
-      &lt;/div&gt;
-    );
-  }
-
-  return (
-    &lt;div style={shell}&gt;
-      &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;center&quot;, gap: 10 }}&gt;
-        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot; }}&gt;Today&lt;/div&gt;
-        &lt;button
-          onClick={() =&gt; { bumpPassageOffset(); bump((n) =&gt; n + 1); }}
-          title=&quot;Show another passage&quot;
-          style={{
-            border: &quot;2px solid #D8D0BF&quot;, background: &quot;#F9F6EE&quot;, color: &quot;#6E6759&quot;, borderRadius: 0,
-            cursor: &quot;pointer&quot;, padding: &quot;3px 9px&quot;, flex: &quot;0 0 auto&quot;,
-            fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, letterSpacing: 0.8, textTransform: &quot;uppercase&quot;,
-          }}
-        &gt;
-          Another
-        &lt;/button&gt;
-      &lt;/div&gt;
-      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 15, lineHeight: 1.65, color: &quot;#1B1B1B&quot;, marginTop: 10 }}&gt;{p.text}&lt;/div&gt;
-      &lt;PassageSource passage={p} /&gt;
-    &lt;/div&gt;
-  );
-}
-
-// The same passage again, above the reflection box, smaller and without the
-// button. There used to be three separate pieces of text on this screen \u2014 a
-// type-matched prompt, a precept prompt, and the tab&#x27;s own pointer, all
-// different, all at once. One thing to sit with, one thing to answer.
-function JournalPassage() {
-  const p = dailyPassageFor(localDateStr(), passageOffset());
-  if (!p) return null;
-  return (
-    &lt;div style={{ border: &quot;2px dotted #A9A192&quot;, background: &quot;#EFE9DC&quot;, padding: &quot;10px 12px&quot;, marginBottom: 12 }}&gt;
-      &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, letterSpacing: 1, textTransform: &quot;uppercase&quot;, color: &quot;#6E6759&quot;, marginBottom: 6 }}&gt;Today&lt;/div&gt;
-      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13.5, lineHeight: 1.6, color: &quot;#1B1B1B&quot; }}&gt;{p.text}&lt;/div&gt;
-      &lt;PassageSource passage={p} size={10} /&gt;
-    &lt;/div&gt;
-  );
-}
-
-function PracticeTab({ practice, onStartLog, onUpdateEntry, onDeleteEntry, teachings = [], setTeachings }) {
-  const [editingId, setEditingId] = useState(null);
-  const [confirmId, setConfirmId] = useState(null);
-
-  // Streak deliberately removed: counting consecutive days measures whether you sat,
-  // not what happened while sitting, and turns the log into a thing to protect.
-  const satToday = useMemo(() =&gt; practice.some((p) =&gt; p.date === localDateStr()), [practice]);
-
-  // Sort by date rather than relying on insertion order — once a date is editable,
-  // the order entries were logged in stops matching the order they happened in.
-  // Ties fall back to id (which is Date.now()-based), so two sits on the same day
-  // still read newest-logged first, the way the reversed list used to.
-  const ordered = useMemo(
-    () =&gt; [...practice].sort((a, b) =&gt; {
-      if (a.date !== b.date) return (a.date || &quot;&quot;) &lt; (b.date || &quot;&quot;) ? 1 : -1;
-      return (b.id || 0) - (a.id || 0);
-    }),
-    [practice]
-  );
+  const ordered = [...practice].sort((a, b) =&gt; {
+    if (a.date !== b.date) return (a.date || &quot;&quot;) &lt; (b.date || &quot;&quot;) ? 1 : -1;
+    return (b.id || 0) - (a.id || 0);
+  });
+  const first = ordered[ordered.length - 1];
+  const last = ordered[0];
 
   return (
-    &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 16 }}&gt;
-      &lt;div style={{ background: &quot;#1B1B1B&quot;, borderRadius: 0, padding: 24, color: &quot;#F9F6EE&quot;, boxShadow: &quot;6px 6px 0 #75695A&quot; }}&gt;
-        &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, opacity: 0.6, letterSpacing: 1, textTransform: &quot;uppercase&quot; }}&gt;Daily practice&lt;/div&gt;
-        &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 38, fontWeight: 800, letterSpacing: -1.4, textTransform: &quot;uppercase&quot;, margin: &quot;4px 0 14px&quot; }}&gt;
-          {satToday ? &quot;Sat today&quot; : &quot;Log today&#x27;s sit&quot;}
-        &lt;/div&gt;
-        &lt;button onClick={onStartLog} style={{ ...btnPrimary, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot; }}&gt;
-          Log meditation &amp; journal &lt;ChevronRight size={16} /&gt;
-        &lt;/button&gt;
+    &lt;div style={{ background: &quot;#F9F6EE&quot;, border: &quot;2.5px solid #1B1B1B&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, borderRadius: 0, padding: &quot;18px 20px&quot; }}&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot; }}&gt;
+        Sit journal archive
       &lt;/div&gt;
-
-      &lt;DailyPassage /&gt;
-
-      &lt;TeachingsCard teachings={teachings} setTeachings={setTeachings} /&gt;
-
-      {practice.length === 0 ? (
-        &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, color: &quot;#6E6759&quot;, textAlign: &quot;center&quot;, padding: &quot;20px 0&quot; }}&gt;
-          No entries yet — your first sit will start the log.
-        &lt;/div&gt;
-      ) : (
-        ordered.map((p) =&gt; (
-          &lt;div key={p.id} style={{ background: &quot;#F9F6EE&quot;, border: &quot;2.5px solid #1B1B1B&quot;, boxShadow: &quot;6px 6px 0 #1B1B1B&quot;, borderRadius: 0, padding: &quot;14px 18px&quot; }}&gt;
-            &lt;div style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;flex-start&quot;, gap: 10 }}&gt;
-              &lt;button
-                onClick={() =&gt; { setEditingId(editingId === p.id ? null : p.id); setConfirmId(null); }}
-                title=&quot;Tap to change the date&quot;
-                style={{
-                  border: &quot;none&quot;, background: &quot;transparent&quot;, padding: &quot;0 0 2px&quot;, cursor: &quot;pointer&quot;, textAlign: &quot;left&quot;,
-                  fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 15, color: &quot;#1B1B1B&quot;,
-                  borderBottom: editingId === p.id ? &quot;2px solid var(--activity)&quot; : &quot;2px dotted #A9A192&quot;,
-                }}
-              &gt;
-                {p.date}
-              &lt;/button&gt;
-              &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;center&quot;, gap: 10, flex: &quot;0 0 auto&quot; }}&gt;
-                &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;var(--activity)&quot; }}&gt;{p.duration} min&lt;/div&gt;
-                &lt;button
-                  onClick={() =&gt; { setConfirmId(confirmId === p.id ? null : p.id); setEditingId(null); }}
-                  aria-label=&quot;Delete entry&quot;
-                  title=&quot;Delete entry&quot;
-                  style={{
-                    width: 28, height: 28, borderRadius: 0, border: &quot;2px solid #D8D0BF&quot;, background: &quot;#F9F6EE&quot;,
-                    display: &quot;flex&quot;, alignItems: &quot;center&quot;, justifyContent: &quot;center&quot;, cursor: &quot;pointer&quot;,
-                    color: confirmId === p.id ? &quot;#BE3B2A&quot; : &quot;#6E6759&quot;, flex: &quot;0 0 auto&quot;, padding: 0,
-                  }}
-                &gt;
-                  &lt;X size={13} /&gt;
-                &lt;/button&gt;
+      &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#6E6759&quot;, lineHeight: 1.6, marginTop: 6 }}&gt;
+        {practice.length} entr{practice.length === 1 ? &quot;y&quot; : &quot;ies&quot;} from {first.date} to {last.date}. Read-only — sit logging was removed. These stay in every export.
+      &lt;/div&gt;
+      &lt;button onClick={() =&gt; setOpen((o) =&gt; !o)} style={{ ...btnGhost, marginTop: 12, padding: &quot;7px 12px&quot;, fontSize: 12.5 }}&gt;
+        {open ? &quot;Hide&quot; : &quot;Read them&quot;}
+      &lt;/button&gt;
+      {open &amp;&amp; (
+        &lt;div style={{ marginTop: 14, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 12, maxHeight: 420, overflowY: &quot;auto&quot; }}&gt;
+          {ordered.map((p) =&gt; (
+            &lt;div key={p.id} style={{ borderTop: &quot;2px solid #D8D0BF&quot;, paddingTop: 10 }}&gt;
+              &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot;, letterSpacing: 0.4, textTransform: &quot;uppercase&quot; }}&gt;
+                {p.date}{p.duration ? ` · ${p.duration} min` : &quot;&quot;}
               &lt;/div&gt;
+              &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11.5, color: &quot;#6E6759&quot;, marginTop: 3 }}&gt;
+                {practiceReadout(p)}
+              &lt;/div&gt;
+              {p.journal &amp;&amp; (
+                &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, color: &quot;#1B1B1B&quot;, marginTop: 6, lineHeight: 1.6, fontStyle: &quot;italic&quot; }}&gt;
+                  &quot;{p.journal}&quot;
+                &lt;/div&gt;
+              )}
             &lt;/div&gt;
-
-            {editingId === p.id &amp;&amp; (
-              &lt;div style={{ marginTop: 10, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
-                &lt;div style={{ display: &quot;flex&quot;, gap: 6, flexWrap: &quot;wrap&quot; }}&gt;
-                  {[0, 1, 2].map((daysBack) =&gt; {
-                    const d = new Date(); d.setDate(d.getDate() - daysBack);
-                    const ds = localDateStr(d);
-                    return (
-                      &lt;Chip key={daysBack} active={p.date === ds} onClick={() =&gt; onUpdateEntry(p.id, { date: ds })}&gt;
-                        {daysBack === 0 ? &quot;Today&quot; : daysBack === 1 ? &quot;Yesterday&quot; : &quot;2 days ago&quot;}
-                      &lt;/Chip&gt;
-                    );
-                  })}
-                &lt;/div&gt;
-                &lt;input
-                  type=&quot;date&quot;
-                  value={p.date}
-                  max={localDateStr()}
-                  onChange={(ev) =&gt; ev.target.value &amp;&amp; onUpdateEntry(p.id, { date: ev.target.value })}
-                  style={{
-                    width: &quot;100%&quot;, border: &quot;2px solid #1B1B1B&quot;, borderRadius: 0, padding: &quot;9px 12px&quot;,
-                    fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 14, background: &quot;#F9F6EE&quot;, color: &quot;#1B1B1B&quot;,
-                  }}
-                /&gt;
-                &lt;button onClick={() =&gt; setEditingId(null)} style={{ ...btnGhost, justifyContent: &quot;center&quot;, padding: &quot;8px 12px&quot;, fontSize: 12.5 }}&gt;
-                  Done
-                &lt;/button&gt;
-              &lt;/div&gt;
-            )}
-
-            {confirmId === p.id &amp;&amp; (
-              &lt;div style={{ marginTop: 10, border: &quot;2px solid #BE3B2A&quot;, background: &quot;#F9E4DE&quot;, padding: &quot;10px 12px&quot;, display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
-                &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, fontWeight: 600, color: &quot;#BE3B2A&quot;, lineHeight: 1.5 }}&gt;
-                  Delete this entry? The journal text goes with it and there&#x27;s no undo.
-                &lt;/div&gt;
-                &lt;div style={{ display: &quot;flex&quot;, gap: 8 }}&gt;
-                  &lt;button onClick={() =&gt; setConfirmId(null)} style={{ ...btnGhost, flex: 1, justifyContent: &quot;center&quot;, padding: &quot;8px 12px&quot;, fontSize: 12.5 }}&gt;
-                    Keep it
-                  &lt;/button&gt;
-                  &lt;button onClick={() =&gt; { setConfirmId(null); onDeleteEntry(p.id); }} style={{ ...btnPrimary, background: &quot;#BE3B2A&quot;, flex: 1, justifyContent: &quot;center&quot;, padding: &quot;8px 12px&quot;, fontSize: 12.5 }}&gt;
-                    Delete
-                  &lt;/button&gt;
-                &lt;/div&gt;
-              &lt;/div&gt;
-            )}
-
-            &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;#6E6759&quot;, marginTop: 8 }}&gt;
-              {practiceReadout(p)}
-            &lt;/div&gt;
-            {p.journal &amp;&amp; (
-              &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 13, color: &quot;#1B1B1B&quot;, marginTop: 8, lineHeight: 1.6, fontStyle: &quot;italic&quot; }}&gt;
-                &quot;{p.journal}&quot;
-              &lt;/div&gt;
-            )}
-          &lt;/div&gt;
-        ))
+          ))}
+        &lt;/div&gt;
       )}
     &lt;/div&gt;
+  );
+}
+
+// Retiring happens in the log, in the moment, which is right — but a decision
+// made in that moment should be reversible somewhere calm. This is the only
+// place a retired stretch can be seen or brought back, and it stays out of the
+// way entirely until there is something in it.
+function RetiredStretches({ stretches = [], setStretches }) {
+  const retired = stretches.filter((s) =&gt; s.retiredAt);
+  if (retired.length === 0) return null;
+
+  const restore = (key) =&gt; {
+    setStretches((prev) =&gt; unretireStretch(prev, key));
+  };
+
+  return (
+    &lt;Card title=&quot;Retired stretches&quot; sub=&quot;Dropped from the routine — they will not be suggested again&quot;&gt;
+      &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 12 }}&gt;
+        {retired.map((s) =&gt; (
+          &lt;div key={s.key} style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, alignItems: &quot;flex-start&quot;, gap: 12, borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 10 }}&gt;
+            &lt;div&gt;
+              &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 13, color: &quot;#1B1B1B&quot; }}&gt;{s.label}&lt;/div&gt;
+              &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 11, color: &quot;#6E6759&quot;, marginTop: 2 }}&gt;
+                {s.muscle}{s.retiredAt ? ` · retired ${s.retiredAt}` : &quot;&quot;}
+              &lt;/div&gt;
+            &lt;/div&gt;
+            &lt;button onClick={() =&gt; restore(s.key)} style={{ ...btnGhost, padding: &quot;6px 10px&quot;, fontSize: 11.5, flex: &quot;0 0 auto&quot; }}&gt;
+              Bring back
+            &lt;/button&gt;
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/Card&gt;
   );
 }
 
@@ -3637,7 +3644,6 @@ function App() {
   const [practice, setPractice] = useState([]);
   const [tab, setTab] = useState(&quot;today&quot;);
   const [logging, setLogging] = useState(false);
-  const [practiceLogging, setPracticeLogging] = useState(false);
   const [draft, setDraft] = useState(null);
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState(null);
@@ -3738,32 +3744,23 @@ function App() {
     });
   }, []);
 
-  const updatePractice = useCallback((updater) =&gt; {
-    setPractice((prev) =&gt; {
-      const next = typeof updater === &quot;function&quot; ? updater(prev) : updater;
-      savePractice(next);
+  // Nothing writes sit entries now: the archive is read-only and the logger is
+  // gone. The state is still loaded, still restored by the importer and still
+  // carried in every export — the entries are kept, just never added to.
+
+  // Returns the swap so the caller can say what happened. Written against the
+  // list it has just computed rather than reading state back, because the
+  // wizard needs the replacement&#x27;s label in the same tick it taps the button.
+  const handleRetireStretch = useCallback((key, options) =&gt; {
+    let outcome = { replacement: null };
+    setStretches((prev) =&gt; {
+      const { next, replacement } = retireStretch(prev, key, localDateStr(), options);
+      outcome = { replacement };
+      saveStretches(next);
       return next;
     });
+    return outcome;
   }, []);
-
-  const handlePracticeComplete = useCallback((entry) =&gt; {
-    updatePractice((prev) =&gt; [...prev, entry]);
-    setPracticeLogging(false);
-    setToast(&quot;Practice logged&quot;);
-    setTimeout(() =&gt; setToast(null), 2500);
-  }, [updatePractice]);
-
-  const handlePracticeUpdate = useCallback((id, patch) =&gt; {
-    updatePractice((prev) =&gt; prev.map((p) =&gt; (p.id === id ? { ...p, ...patch } : p)));
-    setToast(&quot;Entry updated&quot;);
-    setTimeout(() =&gt; setToast(null), 2000);
-  }, [updatePractice]);
-
-  const handlePracticeDelete = useCallback((id) =&gt; {
-    updatePractice((prev) =&gt; prev.filter((p) =&gt; p.id !== id));
-    setToast(&quot;Entry deleted&quot;);
-    setTimeout(() =&gt; setToast(null), 2000);
-  }, [updatePractice]);
 
   const handleComplete = useCallback((entry) =&gt; {
     const updated = [...sessions, entry];
@@ -3811,7 +3808,6 @@ function App() {
 
   const TABS = [
     { key: &quot;today&quot;, label: &quot;Today&quot; },
-    { key: &quot;practice&quot;, label: &quot;Practice&quot; },
     { key: &quot;kitchen&quot;, label: &quot;Kitchen&quot; },
     { key: &quot;history&quot;, label: &quot;History&quot; },
     { key: &quot;plan&quot;, label: &quot;Plan&quot; },
@@ -3902,7 +3898,7 @@ function App() {
           &lt;/div&gt;
         )}
 
-        {!logging &amp;&amp; !practiceLogging &amp;&amp; draft &amp;&amp; (
+        {!logging &amp;&amp; draft &amp;&amp; (
           &lt;div style={{ border: &quot;3px solid #1B1B1B&quot;, background: &quot;#FFC400&quot;, padding: 14, marginBottom: 22 }}&gt;
             &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10.5, fontWeight: 600, letterSpacing: 1.4, textTransform: &quot;uppercase&quot;, color: &quot;#1B1B1B&quot;, marginBottom: 6 }}&gt;
               Unfinished workout
@@ -3918,26 +3914,15 @@ function App() {
         )}
 
         {logging ? (
-          &lt;LogWizard sessions={sessions} exercises={exercises} stretches={stretches} initialDraft={draft} onCancel={() =&gt; { clearDraft(); setDraft(null); setLogging(false); }} onComplete={handleComplete} /&gt;
-        ) : practiceLogging ? (
-          &lt;PracticeWizard onCancel={() =&gt; setPracticeLogging(false)} onComplete={handlePracticeComplete} /&gt;
+          &lt;LogWizard sessions={sessions} exercises={exercises} stretches={stretches} initialDraft={draft} onCancel={() =&gt; { clearDraft(); setDraft(null); setLogging(false); }} onComplete={handleComplete} onRetireStretch={handleRetireStretch} /&gt;
         ) : tab === &quot;today&quot; ? (
           &lt;TodayTab sessions={sessions} plan={plan} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} onStartLog={() =&gt; { clearDraft(); setDraft(null); setLogging(true); }} sila={sila} setSila={updateSila} /&gt;
-        ) : tab === &quot;practice&quot; ? (
-          &lt;PracticeTab
-            practice={practice}
-            onStartLog={() =&gt; setPracticeLogging(true)}
-            onUpdateEntry={handlePracticeUpdate}
-            onDeleteEntry={handlePracticeDelete}
-            teachings={teachings}
-            setTeachings={updateTeachings}
-          /&gt;
         ) : tab === &quot;kitchen&quot; ? (
           &lt;KitchenTab recipes={recipes} setRecipes={updateRecipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} sessions={sessions} rules={kitchenRules} setRules={updateKitchenRules} /&gt;
         ) : tab === &quot;history&quot; ? (
           &lt;HistoryTab sessions={sessions} exercises={exercises} allStretches={stretches} recipes={recipes} mealPlan={mealPlan} onUpdateSession={handleSessionUpdate} onDeleteSession={handleSessionDelete} /&gt;
         ) : (
-          &lt;PlanTab plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} sila={sila} kitchenRules={kitchenRules} teachings={teachings} /&gt;
+          &lt;PlanTab plan={plan} setPlan={(p) =&gt; { setPlan(p); savePlan(p); }} sessions={sessions} exercises={exercises} setExercises={updateExercises} stretches={stretches} setStretches={updateStretches} recipes={recipes} mealPlan={mealPlan} practice={practice} sila={sila} kitchenRules={kitchenRules} teachings={teachings} setTeachings={updateTeachings} /&gt;
         )}
 
         {toast &amp;&amp; (
@@ -6199,7 +6184,7 @@ function HistoryTab({ sessions, exercises, allStretches = STRETCHES, recipes = [
   );
 }
 
-function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, sila = {}, kitchenRules = [], teachings = [] }) {
+function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches = STRETCHES, setStretches, recipes = [], mealPlan = [], practice, sila = {}, kitchenRules = [], teachings = [], setTeachings }) {
   const [showAdd, setShowAdd] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
   const [newEx, setNewEx] = useState({ label: &quot;&quot;, unit: &quot;lb&quot;, targetSets: 3, targetReps: 12, step: 5, noWeight: false, toChamber: false, sessionType: &quot;both&quot; });
@@ -6315,6 +6300,9 @@ function PlanTab({ plan, setPlan, sessions, exercises, setExercises, stretches =
           Whenever you get an updated version of this file from me, export first, open the new file, then import — it carries sessions, plan, exercises, stretches, recipes, meal plan and practice entries. If the download does not start (some phones block it from a local file), use Show as text and copy it into a note instead.
           &lt;/div&gt;
       &lt;/Card&gt;
+      &lt;RetiredStretches stretches={stretches} setStretches={setStretches} /&gt;
+      &lt;TeachingsCard teachings={teachings} setTeachings={setTeachings} /&gt;
+      &lt;PracticeArchive practice={practice} /&gt;
       &lt;Card title=&quot;Goals&quot;&gt;
         &lt;div style={{ display: &quot;flex&quot;, gap: 8, flexWrap: &quot;wrap&quot; }}&gt;
           {plan.goals.map((g) =&gt; (
