@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ledger-project-brief.html</title>
+<style>
+ body{margin:0;background:#F4F4F1;font-family:system-ui,sans-serif;color:#111}
+ header{padding:16px 18px;border-bottom:2px solid #111;background:#fff}
+ h1{margin:0;font-size:17px}
+ p{margin:6px 0 0;font-size:13px;color:#555;line-height:1.5}
+ pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
+      font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
+</style></head><body>
+<header><h1>ledger-project-brief.html</h1><p>Ledger project notes. For the project knowledge area.</p></header>
+<pre># Ledger — project brief
+
+Personal fitness + practice + meal-prep tracker for Brian. Single-user, offline-first,
+one self-contained HTML file served from GitHub Pages and installed to the Android
+home screen as a PWA.
+
+## Files in this project
+- `ledger-source.html` — the entire app. One file, ~3,000 lines, React. This is the
+  source of truth for everything inside `&lt;div id=&quot;root&quot;&gt;`. Delivered wrapped in an
+  HTML viewer because `.jsx` and `.md` will not download on Brian&#x27;s device.
+- `index.html` — the compiled, deployable app. What actually ships.
+- `ledger-project-brief.html` — this file.
+- `practice-research.html` — the research behind the Practice design: what insight
+  traditions say the qualities of mindfulness actually are, and why a practice log
+  should not score, streak, or stage-track. Read it before adding pointers or
+  reworking Practice, so new material stays grounded in the sources.
+
+## Deploy
+1. Upload `index.html` to the GitHub repo, replacing the existing one.
+2. Edit `sw.js` in place and bump the cache version number, or the service worker
+   serves the old app from cache and the update appears to have done nothing.
+3. Update `ledger-source.html` in project knowledge so source and shipped file match.
+Pages redeploys take a few minutes; the change is not live the instant the commit lands.
+
+## Build
+The shipped artifact is a single HTML file with React bundled in — no CDN, no network
+at runtime except Google Fonts (which degrade gracefully to system sans).
+
+```
+esbuild App.jsx --bundle --format=iife --loader:.jsx=jsx --jsx=transform \
+  --outfile=bundle.js --minify
+```
+Then wrap `bundle.js` in an HTML shell: `&lt;div id=&quot;root&quot;&gt;`, a `#fallback` div shown by a
+`window.onerror` handler, and the Archivo / Inter / IBM Plex Mono font link.
+
+If esbuild isn&#x27;t available (e.g. a sandbox with no network), the shipped file can be
+rebuilt with `tsc` instead — this is how the current standalone was actually produced:
+
+```
+tsc App.jsx --allowJs --jsx react --module commonjs --target es2020 \
+  --moduleResolution node --ignoreDeprecations 6.0 --esModuleInterop \
+  --skipLibCheck --outDir tsc-out
+```
+Then inline React&#x27;s CJS production builds (`react`, `react-dom`, `react-dom/client`,
+`scheduler`) into a small `__modules` registry with a `require()` shim that remaps
+`./cjs/*.production.js` names, set `process.env.NODE_ENV = &quot;production&quot;`, and append
+the transpiled entry. Output lands within a few KB of the esbuild artifact. Prefer
+esbuild where it&#x27;s available; this path is a fallback, not the standard.
+
+## PWA install: manifest and icons
+Files that must exist alongside `index.html` in the repo, none of which appear in
+`ledger-source.html`:
+- `manifest.webmanifest` — name/short_name Ledger, start_url and scope `./`, display
+  standalone, background_color and theme_color `#EFE9DC`, and an icons array listing
+  all four PNGs below. Both `purpose: any` and `purpose: maskable` entries are
+  required; without a maskable icon Android parks the icon inside a white box.
+- `icon-192.png`, `icon-512.png` — rounded-tile version, cream ground.
+- `icon-192-maskable.png`, `icon-512-maskable.png` — full-bleed cream ground, mark
+  pulled in to survive the launcher&#x27;s circle crop.
+- `apple-touch-icon.png` — 180px, full bleed.
+
+The mark is an open ring (a circle with a gap at top) in `#1B1B1B` over a `#75695A`
+offset shadow on the `#EFE9DC` paper ground — the app&#x27;s own offset-shadow motif. The
+tile has rounded corners, which is the one place the zero-radius rule is broken, since
+a launcher icon is not app UI.
+
+Known failure mode, encountered once: `manifest.webmanifest` was referenced by
+`index.html` but did not exist in the repo, which is what makes Android fall back to a
+generic icon. A 404 on the manifest is silent — nothing in the app reports it. If the
+home-screen icon ever looks wrong, load the manifest URL directly and confirm it
+returns text rather than a 404 BEFORE touching anything else.
+
+## Never clear site data
+All app data lives in localStorage under keys prefixed `ledger:`. Clearing Chrome&#x27;s
+site data deletes every logged entry permanently — this has happened once, costing a
+day of entries, and was only survivable because a backup existed. Export from the Plan
+tab (`ledger-backup-YYYY-MM-DD.json` to Downloads) BEFORE any troubleshooting step that
+touches storage, service workers, or site settings. Import from the same tab restores
+sessions, plan, exercises, stretches, recipes, mealPlan, and practice wholesale, so do
+not log anything new between a data loss and a restore — the import overwrites.
+
+To reset a stuck service worker without touching data, use
+`chrome://serviceworker-internals` and unregister the entry for the site. Do not use
+&quot;Delete site data&quot;.
+
+## Practice: the tab was removed entirely (Sept 2026)
+Brian stopped using the sit log and asked for it to go: logging the sit was a burden
+he could not afford, and having one more thing to attend to was itself hindering the
+practice. That is the same conclusion every earlier decision in this section kept
+reaching from the other direction — no streak, no score, nothing to protect — followed
+all the way down. Do not rebuild it.
+
+Deleted: `PracticeTab`, `PracticeWizard`, `DailyPassage`, `JournalPassage`,
+`ReflectionFrame`, the Practice entry in `TABS`, and every practice mutation handler.
+Nothing anywhere prompts a sit, asks how one went, or counts sits.
+
+Kept, deliberately:
+- `SilaBand` stays on Today. He asked for it by name — the sila period reminders are
+  the part he likes. Everything it depends on stays with it: the teachings library,
+  `dailyPassageFor`, `preceptOfDay`, `silaPeriod`.
+- `TeachingsCard` moved to the Plan tab, since importing a teaching is not a daily
+  burden and the band needs passages to draw on.
+- `PracticeArchive` on the Plan tab renders his 38 existing journal entries read-only,
+  collapsed behind a tap. Removing the logging is not a reason to make what he already
+  wrote unreachable. `practiceReadout`, `MIND_ENERGY`, `MIND_ATTITUDE` and
+  `MEDITATION_RATINGS` survive only to render those old entries.
+- Practice entries still ride in every export and are still restored on import.
+
+The earlier decisions that produced this one are recorded below so the reasoning is not
+lost with the feature:
+- No streak. Counting consecutive days measured whether he sat, not what happened.
+- No ranked absorption rating. It made &quot;absorbed&quot; the goal.
+- No post-sit chip readings (energy, attitude of the observing mind). Do not check that
+  decision against the stored answers: they look well spread, but four named options
+  made picking one feel required and &quot;unclear&quot; read as the non-answer, so an opaque
+  recollection got worked into something more specific than it was. A self-report field
+  cannot be validated by its own output — a leading question and a good one produce the
+  same-looking distribution.
+- The session closer still has a one-tap Meditation chip inside the gym log. That is
+  part of a log he is already filling in, not a separate thing to maintain. It stays.
+
+## Practice text: direct quotation only
+Still binding for anything the sila band shows. No text the app wrote itself may ever
+appear as practice material. `PRACTICE_POINTERS` and `SILA_POINTERS` are deleted and
+must not come back; `practice-research.html` is background for design decisions only
+and nothing in it may become displayed text. Passages come from the imported-teachings
+library, and `fetchedHaystack` + `verbatimKey` check every extracted segment back
+against the page it came from, dropping anything not there word for word. That gate
+applies to new imports only — the four teachings imported before it existed have never
+been checked.
+
+## Exercise: the hip hinge is a back extension, not a hip thrust (Sept 2026)
+Brian retired the hip thrust as too awkward, which it is: a bench to position, a
+dumbbell to roll into your own hip crease, padding to sort out, all on a gym floor. An
+exercise that awkward to start is an exercise that gets skipped, and a skipped hinge
+trains nothing at all.
+
+The 45° back extension took over the `hipHinge` pattern at priority 1, prereq
+`legPress`. It is now loadable (`step: 5`, hug a plate) rather than bodyweight-only,
+and its cueing was rewritten for glute drive rather than spinal extension — stop at a
+straight line, do not arch past it. `legCurl`&#x27;s prereq moved from `hipThrust` to
+`backExtension`. `hipThrust` is out of `EXERCISE_LIBRARY` entirely.
+
+`migrateExercises` deactivates his configured `hipThrust` and stamps `retiredAt`, which
+is what makes it idempotent — deliberately no `retiredAt` in `DEFAULT_EXERCISES`, or the
+merge would hand a stored `active: true` a `retiredAt` from the default and the
+migration would skip it. Logged hip thrust sets in past sessions are untouched and still
+render; `HIP_THRUST_EXPLAINER` is kept for exactly that reason.
+
+WATCH: `suggestExerciseExpansion`&#x27;s settling gate holds any new suggestion for one
+session after a recent addition. It will briefly say &quot;something new was added recently&quot;
+rather than offering the back extension. That is pre-existing and correct, not a bug.
+
+## Stretches: three anchors plus a monthly fourth
+Brian was routinely skipping stretches that were too complex to learn and never felt
+right, then bailing. `STRETCH_SESSION_CAP` is **4** and must not be raised: he asked
+for fewer, and the tail of holds at the end of a session is the part that gets skipped.
+
+**The three anchors (hipFlexor, hamstring, calf) run every session.** A muscle only
+gains range when it is stretched often — ACSM puts the floor at 2-3 days a week per
+muscle, holds of 10-30s repeated to about 60s. Which areas to anchor is a preference,
+not something the evidence dictates; what it is clear on is consistency. (An earlier
+note justified these three by &quot;sitting all day shortens them.&quot; That was stated more
+confidently than the evidence supports — do not repeat it as fact.)
+
+**The fourth stretch holds its slot for a month (`ROTATION_DAYS` = 28), every session,
+run days included, then moves to the body area covered longest ago.** It used to change
+every session. That looked like variety and worked as the opposite: thirteen stretches
+taking turns in one slot meant each came round about once every two and a half weeks,
+too rarely to change range and too rarely to ever become familiar — which is most of
+why some felt complex and wrong. Brian asked why there wasn&#x27;t *more* rotation; more,
+done per session, would have made each stretch rarer still. Variety and frequency pull
+against each other in a four-stretch session. Rotating slowly keeps both: ~20 sessions
+per stretch per month, and seven areas across seven months. It is my design, not a
+textbook protocol, but it is the shape a physical therapist prescribes — a few, done
+often, for weeks. The cost, stated honestly: an area&#x27;s gains partly fade after its
+month. Lasting change is in the anchors; the monthly slot keeps the rest of the body
+from being neglected. Do not revert this to per-session rotation.
+
+`monthlyStretch()` is derived entirely from the session log — no stored state to save,
+export or drift. Rules worth not regressing:
+- The current month is the rotating stretch the most recent sessions have offered,
+  walking back until a *different* rotating stretch appears. A session with no rotating
+  key recorded is neutral: an untapped stretch is simply not recorded, and treating that
+  as &quot;the month changed&quot; would end months early whenever he left it blank.
+- A new month picks the area covered longest ago, then the simplest stretch in it
+  (complexity before recency), so a fiddly alternate like the sleeper only gets a month
+  once the simpler option for its area is retired.
+- Areas the anchors already cover are excluded. A second hip-flexor stretch is an
+  alternate for swapping, not a month&#x27;s work.
+- Swapping the month&#x27;s stretch keeps the month: `retireStretch` tags the replacement
+  with `replaces`, and `stretchLineage()` treats the chain as one slot so the change
+  date does not move. Dropping it ends the month and the next area starts.
+- Anchors are included regardless of session emphasis, and so is the month&#x27;s stretch.
+  Session A/B emphasis no longer affects selection — every-session exposure matters
+  more than stretching the muscle just trained, which is weakly supported anyway.
+- No refilling. If an area is dropped outright and nothing else covers it, the session
+  is genuinely one shorter. That is what &quot;Drop it&quot; says; refilling would make it untrue.
+
+**Swap versus drop.** Marking a stretch 0 rounds shows two buttons. **Swap it** — this
+stretch is wrong for me: `retireStretch(..., {drop: false})` pulls in the simplest unused
+stretch of the same `region`, never harder than what it replaced. **Drop it** — I want
+less. `retireNoteFor()` builds the message from what actually happened (swapped; a
+stand-in promoted; the area gone; a new area taking the month) — keep it that way, as
+an earlier version promised &quot;from your next session&quot; for cases where that was false.
+
+**Anchor succession.** When an anchor goes and no replacement arrives, the simplest
+other active stretch for that region is promoted (`anchor: true`). Bringing the original
+back runs `unretireStretch`, which enforces one anchor per area — otherwise two anchors
+for one area fill the four-stretch session and silently end the monthly slot. The named
+anchor keeps the role.
+
+Mechanics carried over: every stretch has `region` and `complexity` 1-3; the bench is 16
+entries so every region has a complexity-1 option; `suggestStretchExpansion` only offers
+regions not already trained and never offers a retired stretch back; `RetiredStretches`
+on Plan is the only way back; `mergeStretches` merges stored library entries over their
+current definition so new fields like `region` reach stretches saved before they existed.
+
+## Progression: three defects found by auditing real logs (Sept 20)
+All three were found by running the app&#x27;s own functions against twelve weeks of
+actual data rather than against seed data. None of them threw an error; each one
+quietly did the wrong thing.
+
+1. **A hold echoed the last logged reps, so one short session became the permanent
+   target.** Single-Leg Press was logged at 6 reps once against a target of 10, and
+   every recommendation after that read 70lb × 6. `holdReps` now floors at the
+   target: `Math.max(repLow, lastReps)`. A short day is a short day, not a demotion.
+   Struggling has its own branch and still resets to target.
+2. **&quot;Solid&quot; was a terminal state.** The engine advances on two consecutive &quot;easy&quot;
+   sessions; an exercise that always feels solid never moved and nothing noticed.
+   Overhead Press sat at 10lb × 8 for seven sessions. There is now a `nudge` action
+   after `STAGNANT_LIMIT` (5) unchanged sessions. When the exercise is running below
+   its own rep target the nudge is simply reaching that target — do not make it
+   target+1, which asked for three more reps than were actually being done.
+3. **`checkPlateau` required a struggle.** Standing still without struggling is the
+   commoner failure and went entirely unreported. It now also fires on
+   `stagnantSessions() &gt;= STAGNANT_LIMIT` with different advice — nudge rather than
+   deload.
+
+## Stretch expansion must not offer a region already trained
+Shipping ten simpler alternates to the bench had an immediate unintended effect: the
+expansion suggester offered them as pool *additions*, and within hours the routine
+had picked up a second hip-flexor stretch and a second hamstring stretch — growing
+the pool in the one direction it had just been asked not to grow.
+
+`suggestStretchExpansion` now only offers a stretch whose `region` is not already
+covered by an active stretch. That distinction is the right one anyway: the bench
+holds gap-fillers (new regions) and alternates (regions already covered, simpler, so
+a retirement has somewhere to go). A second stretch for a trained region is not an
+expansion, it is a swap, and swaps belong to `retireStretch`. Do not remove this
+filter to &quot;give more options&quot;.
+
+## Intensity: the app governs distance, and now has a view on effort
+`suggestCardioTarget` was built so volume would not advance on the back of a pace
+gain. It does that job. But nothing in the app had any view of how hard a session
+was, and the real logs show intensity climbing in through the side door: average
+heart rate went from the 120s in July to the 150s-160s in September while distance
+and duration also rose. Volume and intensity advancing together is precisely what
+the cardio target exists to prevent.
+
+`assessIntensity()` reports one thing: whether any recent run was easier than the
+rest. Easy is taken as below `EASY_FRACTION` (0.75) of the highest heart rate his own
+log has recorded — his own observed number, not an age formula, and conservative
+because a true maximum is almost certainly higher than anything hit in training.
+
+A first version compared recent runs against a *percentile of his own recent runs*.
+That was wrong and is worth not repeating: a percentile of a drifting distribution
+always has something below it, so it structurally cannot detect the thing it exists
+to detect. It returned &quot;no flag&quot; on data with no easy day in it.
+
+This makes no medical claim and must not start making one. It reports a programming
+observation — that there is no easy day — and notes it bears on the stated
+stress-reduction goal.
+
+## What the September 20 audit found in the training itself
+Recorded because it is the evidence behind the above, and because it is genuinely
+good news that should not be lost:
+- Pace 17.7 → 13.5 min/mile. Distance 1.64 → 2.85 mi. Both over twelve weeks.
+- Aerobic efficiency (speed per heartbeat) 26.2 → 29.2, and at matched heart rate
+  (150-160) speed went 4.37 → 4.50 mph. That is real aerobic adaptation, not just
+  increased effort — the distinction the efficiency measure exists to make.
+- Strength is progressing on every lift that has moved: seated row 60 → 85lb, lat
+  pulldown 55 → 65, leg press 95 → 125, getup bodyweight → 25lb.
+- Stretch completion is falling: 87% → 81% → 70% across the log. That is the
+  pressure behind the cap of 4 and the drop control.
+
+## Design language
+Printed-matter Swiss. Warm paper ground, hard un-blurred offset shadows, no gloss.
+- Type: Archivo (display, 700/800/900, uppercase, tight tracking), Inter (body),
+  IBM Plex Mono (numerals, labels). Oversized Archivo 900 numerals are the signature —
+  the font link must load 900 or Chrome synthesizes it and they render mushy.
+- Ground: `#EFE9DC` paper with printed dot grain · `#F9F6EE` light card surface ·
+  `#1B1B1B` near-black ink · `#6E6759` secondary text · `#D8D0BF` hairline
+- Shadows are a neutral material, never a hue that competes with the accents:
+  `#75695A` deep taupe on dark panels and primary buttons, `#1B1B1B` black on light cards.
+- Accents are semantic, not decorative. Do not reuse them for emphasis:
+  `#0043FF` blue = action only · `#FFC400` yellow = alternate day state and session badge ·
+  `#BE3B2A` red = rejection, deletion, errors only · `#2F6B4F` green on `#E5EDE4` fill =
+  coaching advisories only.
+- Zero border radius anywhere. 2–2.5px black rules, not soft borders. Hard-edged blocks.
+- No rotation anywhere except the tilted verdict stamps. No script or handwriting faces.
+
+## The HTML shell is not in the source
+`ledger-source.html` covers the React app only. The surrounding shell — `theme-color`,
+the `body` background, the `#fallback` error block, the Google Fonts `&lt;link&gt;` — lives
+solely in the compiled `index.html` and has no upstream copy. A visual pass done in the
+source will silently miss it. Current shell values: theme-color `#EFE9DC`, body
+background `#EFE9DC`, fallback text `#BE3B2A`, Archivo weights `600;700;800;900`.
+Note the font list appears twice in `index.html` (shell `&lt;link&gt;` plus an `@import`
+inside the app) and once in the source; all must be changed together.
+
+## Architecture notes
+- All state in `localStorage` under `ledger:` keys — `sessions`, `plan`,
+  `exercises-config`, `stretches-config`, `recipes-config`, `meal-plan`, `practice-entries`, `api-key`.
+- `merge*()` functions reconcile stored user data with updated app defaults on load.
+  App-authored text always refreshes; user fields are preserved. Add to these when
+  adding new default fields, or existing users won&#x27;t see them.
+- `localDateStr()` everywhere — never `toISOString()`. UTC rolls the date over in the
+  evening in US timezones and misdates entries.
+- AI features (chef, custom exercise explainers) need the user&#x27;s own Anthropic API key,
+  entered via the key icon. Everything else works with no key and no network.
+
+## Hard-won constraints (do not regress these)
+- Oven runs hot: 400°F middle rack, always give internal temps for protein
+- Kale not spinach for 5-day preps; cilantro is a finishing herb; cumin 1–1.5 tsp max
+- Rotisserie chicken is a legitimate shortcut, not a compromise
+- Groceries: Market Basket, exact can/package sizes, split fresh vs pantry
+- Session A = upper (row, pulldown, chest press). Session B = lower + core.
+- Turkish getups are logged per side, not total. Bodyweight phase progresses 3 -&gt; 6 reps
+  per side, then the kettlebell comes in at 15lb and reps reset to 3 — load and volume
+  never increase in the same step.
+- 2-hour hard ceiling per gym visit — `estimateSessionMinutes()` enforces it
+- No movement gets recommended that needs a coach to learn safely
+- A full-size `Stepper` is 218px (40 + 14 + 110 + 14 + 40). A Card on a 360–414px
+  phone only gives ~272 / 305 / 326px of content width, so **two full-size steppers
+  never fit side by side.** Any pair goes in `&lt;StepperPair&gt;`, which lays children out
+  as `repeat(n, minmax(0, 1fr))` and passes `compact` down automatically. The
+  `minmax(0, …)` is the actual guarantee — grid items default to `min-width: auto`
+  and will push past the container without it. In compact mode the readout is the
+  part that yields (`flex: 1 1 0; minWidth: 0`); the 40px tap targets never shrink,
+  and the unit stacks under the numeral so the readout needs ~40px instead of ~110.
+  A lone stepper inside `StepperPair` reverts to full size on its own.
+- Practice entries are editable in place — tap the date to change it, ✕ to delete
+  behind an inline confirm. `PracticeTab` therefore sorts by date descending (id as
+  tiebreak) rather than insertion order; a reversed array stops matching reality once
+  dates can be edited.
+
+## Testing convention
+Everything is verified in headless Chromium via Playwright against `file://` before
+delivery — render, interaction, and persistence. Compile-clean is not sufficient;
+several real bugs here were scope errors that compiled fine and crashed at runtime.
+
+Layout work is verified at **360 / 393 / 414px** — the three widths that matter for
+this phone. The check is `documentElement.scrollWidth &lt;= clientWidth` on every
+screen touched, plus a clipping sweep (`el.scrollWidth &gt; el.clientWidth` where
+overflow is hidden) so nothing just hides its overflow instead of fitting. Stress
+the numerals:
+a stepper that fits at 32 min may not fit at 108.
+
+## Known, deliberately unfixed
+- `PracticeWizard` maps `{[0,1,2].map((back) =&gt; …)}` over the date chips, which
+  shadows the `const back = () =&gt; setStep(…)` nav function. Harmless today because
+  the shadow is contained to the callback; a live footgun if a Back button is ever
+  added inside that map. New code uses `daysBack`.
+</pre>
+</body></html>

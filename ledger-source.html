@@ -10,7 +10,7 @@
  pre{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;
       font-family:ui-monospace,monospace;font-size:11.5px;line-height:1.55;background:#fff}
 </style></head><body>
-<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build (Sept 20 2026), three changes. (1) The Practice tab is gone. Brian stopped using it: logging a sit was a burden he could not afford and having one more thing to attend to was itself hindering the practice, which is the same conclusion the rest of the practice design kept reaching — no streak, no score, nothing to protect — followed all the way down. PracticeTab, PracticeWizard, DailyPassage, JournalPassage and ReflectionFrame are deleted and nothing prompts a sit anywhere. The sila band stays on Today because he asked for it, so the teachings library and dailyPassageFor stay with it and TeachingsCard moved to Plan. His 38 journal entries are NOT deleted: PracticeArchive on the Plan tab renders them read-only, and they still ride in every export and import. (2) Hip thrust is retired as too awkward — a bench to set up and a dumbbell rolled across the hips, which is an exercise that gets skipped, and a skipped hinge trains nothing. The 45° back extension takes over hipHinge at priority 1 with prereq legPress, now loadable (step 5) rather than bodyweight-only, and legCurl&#x27;s prereq moved with it. migrateExercises deactivates his configured hipThrust and stamps retiredAt so it is idempotent; logged hip thrust sets in past sessions are untouched and still render. (3) Stretches can be retired. Every stretch carries a region and a complexity 1-3; retireStretch marks one inactive and pulls in the simplest unused stretch covering the same region, so the routine swaps rather than shrinking. The bench grew from 6 to 16 so every region has at least two options and at least one complexity-1 option. Marking a stretch 0 rounds in the log shows two buttons, because these are different intentions and conflating them made it impossible to shrink the routine at all: Swap it (wrong stretch — pull in something simpler for the same area) and Drop it (want less — the slot closes). RetiredStretches on Plan can bring one back; suggestStretchExpansion never offers a retired stretch again. STRETCH_SESSION_CAP is 4 — three anchors plus one rotating. Do not raise it: the anchors run every session because range gains are muscle-specific and frequency-driven, and the real lever on “these feel too complex” is a smaller pool, not a bigger cap. A retired anchor hands anchor: true to its stand-in. mergeStretches merges stored library entries over their current STRETCH_LIBRARY definition rather than verbatim — without that, the six stretches he added before region existed had no region and silently dropped instead of swapping. Watch: the settling gate in suggestExerciseExpansion will hold the back extension back for one session after any recent addition; that is pre-existing and not a bug. Previously: no app-written text may appear as practice material — fetchedHaystack and verbatimKey check every imported passage back against the page it came from, and the gate applies to new imports only. suggestCardioTarget anchors on the median distance across the window rather than the best run. RunGraph plots every run with no cap. cardioGroup() folds treadmill and outdoor into one running group. History is editable via SessionEditor. Session type “R” skips movement prep and lifting.</p></header>
+<header><h1>ledger-source.jsx</h1><p>Ledger app source code. For the project knowledge area. Hosted as a PWA on GitHub Pages. Latest build (Sept 20 2026), three changes. (1) The Practice tab is gone. Brian stopped using it: logging a sit was a burden he could not afford and having one more thing to attend to was itself hindering the practice, which is the same conclusion the rest of the practice design kept reaching — no streak, no score, nothing to protect — followed all the way down. PracticeTab, PracticeWizard, DailyPassage, JournalPassage and ReflectionFrame are deleted and nothing prompts a sit anywhere. The sila band stays on Today because he asked for it, so the teachings library and dailyPassageFor stay with it and TeachingsCard moved to Plan. His 38 journal entries are NOT deleted: PracticeArchive on the Plan tab renders them read-only, and they still ride in every export and import. (2) Hip thrust is retired as too awkward — a bench to set up and a dumbbell rolled across the hips, which is an exercise that gets skipped, and a skipped hinge trains nothing. The 45° back extension takes over hipHinge at priority 1 with prereq legPress, now loadable (step 5) rather than bodyweight-only, and legCurl&#x27;s prereq moved with it. migrateExercises deactivates his configured hipThrust and stamps retiredAt so it is idempotent; logged hip thrust sets in past sessions are untouched and still render. (3) Stretches can be retired. Every stretch carries a region and a complexity 1-3; retireStretch marks one inactive and pulls in the simplest unused stretch covering the same region, so the routine swaps rather than shrinking. The bench grew from 6 to 16 so every region has at least two options and at least one complexity-1 option. Marking a stretch 0 rounds in the log shows two buttons, because these are different intentions and conflating them made it impossible to shrink the routine at all: Swap it (wrong stretch — pull in something simpler for the same area) and Drop it (want less — the slot closes). RetiredStretches on Plan can bring one back; suggestStretchExpansion never offers a retired stretch again. STRETCH_SESSION_CAP is 4 — three anchors plus one rotating. Do not raise it: the anchors run every session because range gains are muscle-specific and frequency-driven, and the real lever on “these feel too complex” is a smaller pool, not a bigger cap. A retired anchor hands anchor: true to its stand-in. mergeStretches merges stored library entries over their current STRETCH_LIBRARY definition rather than verbatim — without that, the six stretches he added before region existed had no region and silently dropped instead of swapping. Watch: the settling gate in suggestExerciseExpansion will hold the back extension back for one session after any recent addition; that is pre-existing and not a bug. Previously: no app-written text may appear as practice material — fetchedHaystack and verbatimKey check every imported passage back against the page it came from, and the gate applies to new imports only. suggestCardioTarget anchors on the median distance across the window rather than the best run. RunGraph plots every run with no cap. cardioGroup() folds treadmill and outdoor into one running group. History is editable via SessionEditor. Session type “R” skips movement prep and lifting. AUDIT BUILD (Sept 20, from twelve weeks of real logs): three progression defects fixed. A hold used to echo the last logged reps, so one short session became the permanent target — holdReps now floors at the rep target. &quot;Solid&quot; was a terminal state, so an exercise that never felt easy never moved (Overhead Press sat at 10lb x 8 for seven sessions) — there is now a nudge action after STAGNANT_LIMIT unchanged sessions, and when an exercise is below its own rep target the nudge is just reaching that target. checkPlateau required a struggle and so never reported standing still; it now fires on stagnation too. suggestStretchExpansion only offers regions not already trained — without that filter the new simpler alternates got offered as additions and the pool grew a second hip-flexor and a second hamstring stretch within hours. New assessIntensity(): the cardio target governs distance but nothing had any view of effort, and the logs show average HR climbing from the 120s to the 150s-160s while distance also rose. It reports whether any recent run was easier than the rest, easy being below 0.75 of his own highest recorded HR. Do not reimplement it against a percentile of his own runs — that was the first attempt and it structurally cannot detect the thing it is for. Also: retireStretch now promotes another active stretch of the same region to anchor when an anchor is dropped rather than swapped — previously the anchor role vanished with it and the region fell from every session to whenever the rotation reached it. MONTHLY STRETCH (Sept 21): the fourth stretch no longer changes every session. Thirteen stretches taking turns in one slot meant each came round about once every two and a half weeks, too rarely to change range or become familiar. monthlyStretch() now holds one rotating stretch for ROTATION_DAYS (28), every session including runs, then moves to the area covered longest ago, simplest stretch first, skipping areas the anchors already cover. Derived purely from the session log; untapped (unrecorded) stretches are neutral and do not end a month. Swapping the month&#x27;s stretch keeps the month via a replaces tag and stretchLineage(); dropping it starts the next area. selectSessionStretches no longer refills empty slots and ignores session emphasis. unretireStretch now enforces one anchor per area, and retireNoteFor() words the log message from what actually happened. Do not revert to per-session rotation or raise STRETCH_SESSION_CAP.</p></header>
 <pre>import React, { useState, useEffect, useMemo, useCallback } from &#x27;react&#x27;;
 import ReactDOM from &#x27;react-dom/client&#x27;;
 
@@ -847,10 +847,10 @@ async function generateExplainer(name) {
 
 const DEFAULT_PLAN = {
   goals: [&quot;Flexibility&quot;, &quot;Strength&quot;, &quot;Physique&quot;],
-  progressionRule: &quot;Double progression: reps increase first (up to +4 over target) across two easy sessions, then weight steps up and reps reset. A struggled session resets to the last stable weight. Cardio target adjusts from recent pace/HR trend. An exercise unchanged for 4 sessions with a struggle gets flagged for a deload or swap.&quot;,
+  progressionRule: &quot;Double progression: reps increase first (up to +4 over target) across two easy sessions, then weight steps up and reps reset. A struggled session resets to the last stable weight, and a short session never lowers the target. An exercise that sits unchanged for 5 sessions without ever feeling easy gets a one-rep nudge; one unchanged for 4 sessions with a struggle gets flagged for a deload or swap. Cardio distance anchors on your recent typical run and steps up on consistency, not on one good day.&quot;,
   restGuidance: &quot;Aim for at least one full rest day (no structured exercise) somewhere in most 7-day stretches. Session A and B alternate muscle emphasis, so back-to-back A/B days are fine — but a full day off matters too, for tissue recovery and for the stress-reduction goal specifically.&quot;,
   sessionBudgetMinutes: 120,
-  stretchGuidance: &quot;Dynamic movement prep before lifting; static stretching after, while warm. Static holds add up per muscle group — roughly 60s total is the effective dose, and progression happens by adding rounds rather than holding longer, since benefit largely plateaus past that. Stretches are split by session so you&#x27;re stretching what you actually trained. Flexibility is the goal most driven by frequency: 2-3 days a week is the floor, and the routine works at home on non-gym days.&quot;,
+  stretchGuidance: &quot;Dynamic movement prep before lifting; static stretching after, while warm. Four stretches a session: the same three every time — hip flexors, hamstrings, calves — plus a fourth that stays for about a month before moving to a different area. A muscle only gains range when it is stretched often (2-3 days a week at the least), so each stretch is kept long enough to actually count, and to become familiar. Holds add up to roughly 60s per muscle, and progression comes from adding rounds rather than holding longer. The routine works at home on non-gym days too.&quot;,
   queue: [
     { key: &quot;chestPress&quot;, note: &quot;Introduce next Session A — new movement, start light, find working weight in set 1.&quot; },
     { key: &quot;legPress&quot;, note: &quot;95lb rated easy — bump to 105–110lb next attempt.&quot; },
@@ -1096,21 +1096,61 @@ function retireStretch(list, key, dateStr, options) {
     ? null
     : replacementFor(list, target.region, key);
   let next = list.map((s) =&gt; (s.key === key ? { ...s, active: false, retiredAt: dateStr } : s));
+  // Hip flexors, hamstrings and calves are trained every session on purpose.
+  // If one of those is what went, the anchor role has to land somewhere or the
+  // region silently drops from &quot;every session&quot; to &quot;whenever the rotation
+  // happens to pick it&quot; — which, against a pool of a dozen, is rarely.
+  const inherits = isStretchAnchor(target);
+  let heir = null;
   if (replacement) {
-    // Hip flexors, hamstrings and calves are trained every session on purpose.
-    // If one of those is what went, its stand-in takes the anchor slot rather
-    // than dropping into a rotation that would surface it once a fortnight.
-    const inherits = isStretchAnchor(target);
-    const merged = inherits ? { ...replacement, anchor: true } : replacement;
+    // `replaces` is what lets the month carry across a swap: swapping this
+    // month&#x27;s stretch hands the rest of the month to the simpler version
+    // instead of ending it early. See monthlyStretch.
+    const tagged = { ...replacement, replaces: key };
+    const merged = inherits ? { ...tagged, anchor: true } : tagged;
     next = next.some((s) =&gt; s.key === replacement.key)
       ? next.map((s) =&gt; (s.key === replacement.key ? { ...s, ...merged, active: true, retiredAt: undefined } : s))
       : next.concat([{ ...merged, active: true, addedAt: dateStr }]);
+  } else if (inherits) {
+    // Dropped rather than swapped, or nothing left to swap to. If some other
+    // active stretch already covers the region, promote it — that is the whole
+    // reason it was an anchor. Only if nothing covers the region does the
+    // anchor genuinely go away, which is the honest outcome of dropping the
+    // last stretch for a body area.
+    heir = next
+      .filter((s) =&gt; s.active !== false &amp;&amp; s.region === target.region &amp;&amp; s.key !== key)
+      .sort((a, b) =&gt; (a.complexity || 2) - (b.complexity || 2))[0] || null;
+    if (heir) next = next.map((s) =&gt; (s.key === heir.key ? { ...s, anchor: true } : s));
   }
-  return { next, replacement };
+  return { next, replacement, heir, wasAnchor: inherits };
+}
+
+function retireNoteFor(target, res, dropped) {
+  const r = res || {};
+  if (r.replacement) return `${target.label} swapped for ${r.replacement.label}.`;
+  const lead = dropped ? `${target.label} dropped.` : `${target.label} dropped — nothing simpler covers that area.`;
+  if (r.heir) return `${lead} ${r.heir.label} already covers that area, so it becomes one of your every-session stretches.`;
+  if (r.wasAnchor) return `${lead} Nothing else covers that area, so your sessions are one stretch shorter.`;
+  return `${lead} A different area takes this month&#x27;s slot.`;
 }
 
 function unretireStretch(list, key) {
-  return list.map((s) =&gt; (s.key === key ? { ...s, active: true, retiredAt: undefined } : s));
+  let next = list.map((s) =&gt; (s.key === key ? { ...s, active: true, retiredAt: undefined } : s));
+  const restored = next.find((s) =&gt; s.key === key);
+  if (restored &amp;&amp; restored.region &amp;&amp; isStretchAnchor(restored)) {
+    // One anchor per area. Bringing an anchor back after its role passed to a
+    // stand-in would otherwise leave two for the same area, which fills the
+    // four-stretch session with anchors and quietly ends the monthly slot. The
+    // named anchor keeps the role if it is one; otherwise whoever came back.
+    const sameArea = next.filter((s) =&gt; s.active !== false &amp;&amp; s.region === restored.region &amp;&amp; isStretchAnchor(s));
+    if (sameArea.length &gt; 1) {
+      const keep = sameArea.find((s) =&gt; STRETCH_ANCHORS.indexOf(s.key) !== -1) || restored;
+      next = next.map((s) =&gt;
+        s.region === restored.region &amp;&amp; s.key !== keep.key &amp;&amp; s.anchor === true ? { ...s, anchor: false } : s
+      );
+    }
+  }
+  return next;
 }
 
 function daysSinceStretched(sessions, key) {
@@ -1125,16 +1165,160 @@ function daysSinceStretched(sessions, key) {
   return Math.max(0, Math.min(45, days));
 }
 
-function selectSessionStretches(sessionType, allStretches = STRETCHES, sessions = [], cap = STRETCH_SESSION_CAP) {
-  const pool = stretchesForSession(sessionType, allStretches);
-  if (pool.length &lt;= cap) return pool;
-  const anchors = pool.filter(isStretchAnchor);
-  const rest = pool.filter((s) =&gt; !isStretchAnchor(s));
-  const slots = Math.max(0, cap - anchors.length);
-  const scored = rest
-    .map((s) =&gt; ({ s, stale: daysSinceStretched(sessions, s.key), matched: s.emphasis === sessionType ? 6 : 0 }))
-    .sort((a, b) =&gt; (b.stale + b.matched) - (a.stale + a.matched) || a.s.key.localeCompare(b.s.key));
-  return orderStretches(anchors.concat(scored.slice(0, slots).map((x) =&gt; x.s)));
+// ---------- the monthly stretch ----------
+// The fourth slot used to change every session. That sounded like variety and
+// worked as the opposite: with thirteen stretches taking turns in one slot, each
+// came round about once every two and a half weeks. A stretch only changes range
+// when it is done often — the ACSM floor is 2-3 days a week per muscle, for weeks
+// — so none of them were getting enough to matter, and every one of them was
+// unfamiliar every time, which is most of why some felt complex and wrong and
+// got skipped. Brian asked why there wasn&#x27;t more rotation. More, done that way,
+// would have made each stretch rarer still.
+//
+// So the fourth stretch now holds its slot for ROTATION_DAYS, every session,
+// run days included, then the slot moves to the body area covered longest ago.
+// Same four stretches a session; the variety comes month to month instead of
+// session to session. It is the shape a physical therapist would prescribe: a
+// few, done often, for several weeks at a time.
+//
+// Honest about the cost: an area&#x27;s gains partly fade once its month ends. The
+// three anchors are where lasting change happens; the monthly slot is what keeps
+// the rest of the body from being neglected.
+//
+// Everything is derived from the session log. There is no stored state to save,
+// export, import or get out of step: the current month is whichever rotating
+// stretch the most recent sessions have been offering, and how long ago that run
+// began.
+const ROTATION_DAYS = 28;
+
+function daysBetweenDates(a, b) {
+  const ta = Date.parse(a + &quot;T00:00:00&quot;);
+  const tb = Date.parse(b + &quot;T00:00:00&quot;);
+  if (!Number.isFinite(ta) || !Number.isFinite(tb)) return Infinity;
+  return Math.round((tb - ta) / 86400000);
+}
+
+function addDaysStr(dateStr, n) {
+  const [y, m, d] = String(dateStr).split(&quot;-&quot;).map(Number);
+  const dt = new Date(y, (m || 1) - 1, d || 1);
+  dt.setDate(dt.getDate() + n);
+  return localDateStr(dt);
+}
+
+const MONTH_SHORT = [&quot;Jan&quot;, &quot;Feb&quot;, &quot;Mar&quot;, &quot;Apr&quot;, &quot;May&quot;, &quot;Jun&quot;, &quot;Jul&quot;, &quot;Aug&quot;, &quot;Sep&quot;, &quot;Oct&quot;, &quot;Nov&quot;, &quot;Dec&quot;];
+function shortDate(dateStr) {
+  const [, m, d] = String(dateStr || &quot;&quot;).split(&quot;-&quot;).map(Number);
+  return MONTH_SHORT[(m || 1) - 1] &amp;&amp; d ? `${MONTH_SHORT[m - 1]} ${d}` : String(dateStr || &quot;&quot;);
+}
+
+// A stretch plus everything it was swapped in to replace. Swapping the month&#x27;s
+// stretch keeps the month running with the simpler version, and the month&#x27;s
+// start date has to survive that or its end date would jump.
+function stretchLineage(key, allStretches) {
+  const out = new Set([key]);
+  let cur = allStretches.find((s) =&gt; s.key === key);
+  for (let i = 0; cur &amp;&amp; cur.replaces &amp;&amp; i &lt; 12; i++) {
+    const prev = cur.replaces;
+    out.add(prev);
+    cur = allStretches.find((s) =&gt; s.key === prev);
+  }
+  return out;
+}
+
+function monthlyStretch(allStretches = STRETCHES, sessions = [], today = localDateStr()) {
+  const known = allStretches.concat(STRETCHES, STRETCH_LIBRARY);
+  const recordOf = (k) =&gt; known.find((x) =&gt; x.key === k) || null;
+
+  const active = allStretches.filter((s) =&gt; s.active !== false);
+  const anchorRegions = new Set(active.filter(isStretchAnchor).map((s) =&gt; s.region).filter(Boolean));
+  const rotating = active.filter((s) =&gt; !isStretchAnchor(s));
+  // A second stretch for an area the anchors already train every session is an
+  // alternate, kept so a swap has somewhere to go. A whole month of it would
+  // spend the slot on ground already covered.
+  const outsideAnchors = rotating.filter((s) =&gt; !s.region || !anchorRegions.has(s.region));
+  const eligible = outsideAnchors.length ? outsideAnchors : rotating;
+  if (!eligible.length) return null;
+  const eligibleKeys = new Set(eligible.map((s) =&gt; s.key));
+
+  const logged = (sessions || [])
+    .filter((x) =&gt; x &amp;&amp; x.date &amp;&amp; x.stretchRounds &amp;&amp; Object.keys(x.stretchRounds).length &gt; 0)
+    .slice()
+    .sort((a, b) =&gt; (a.date &lt; b.date ? -1 : a.date &gt; b.date ? 1 : (a.id || 0) - (b.id || 0)));
+  // The keys in a logged session that were in the rotating slot rather than
+  // the anchors. An untapped stretch is simply not recorded, so a session can
+  // legitimately have none — that does not mean the month changed.
+  const rotatingKeysOf = (x) =&gt; Object.keys(x.stretchRounds).filter((k) =&gt; {
+    const r = recordOf(k);
+    return r &amp;&amp; !isStretchAnchor(r);
+  });
+  const rank = (a, b) =&gt;
+    (a.complexity || 2) - (b.complexity || 2) || (a.priority || 99) - (b.priority || 99) || a.key.localeCompare(b.key);
+
+  // 1. Is a month already under way?
+  let lastIdx = -1;
+  for (let i = logged.length - 1; i &gt;= 0; i--) {
+    if (rotatingKeysOf(logged[i]).length) { lastIdx = i; break; }
+  }
+  if (lastIdx &gt;= 0) {
+    let best = null;
+    for (const k of rotatingKeysOf(logged[lastIdx])) {
+      // Follow a swap forward to whatever holds the slot now.
+      const holder = eligible.find((s) =&gt; s.key === k)
+        || eligible.find((s) =&gt; s.replaces &amp;&amp; stretchLineage(s.key, allStretches).has(k));
+      if (!holder) continue;
+      const lineage = stretchLineage(holder.key, allStretches);
+      let start = null;
+      let run = 0;
+      for (let i = lastIdx; i &gt;= 0; i--) {
+        const rk = rotatingKeysOf(logged[i]);
+        if (!rk.length) continue;
+        if (!rk.some((x) =&gt; lineage.has(x))) break;
+        start = logged[i].date;
+        run++;
+      }
+      if (!start) continue;
+      const cand = { stretch: holder, start, run };
+      if (!best || cand.run &gt; best.run || (cand.run === best.run &amp;&amp; rank(cand.stretch, best.stretch) &lt; 0)) best = cand;
+    }
+    if (best &amp;&amp; daysBetweenDates(best.start, today) &lt; ROTATION_DAYS &amp;&amp; eligibleKeys.has(best.stretch.key)) {
+      return { stretch: best.stretch, start: best.start, until: addDaysStr(best.start, ROTATION_DAYS), started: true };
+    }
+  }
+
+  // 2. Start the next month: the body area covered longest ago, then within it
+  //    the simplest stretch, then whichever was done longest ago. Sorting on
+  //    complexity before recency means a fiddly alternate only gets a month
+  //    once the simpler option for that area has been retired.
+  const lastIndexWhere = (pred) =&gt; {
+    for (let i = logged.length - 1; i &gt;= 0; i--) if (rotatingKeysOf(logged[i]).some(pred)) return i;
+    return -1;
+  };
+  const scored = eligible.map((st) =&gt; ({
+    st,
+    areaSeen: lastIndexWhere((k) =&gt; { const r = recordOf(k); return !!r &amp;&amp; r.region === st.region; }),
+    seen: lastIndexWhere((k) =&gt; k === st.key),
+  }));
+  scored.sort((a, b) =&gt;
+    a.areaSeen - b.areaSeen
+    || (a.st.complexity || 2) - (b.st.complexity || 2)
+    || a.seen - b.seen
+    || rank(a.st, b.st)
+  );
+  const pick = scored[0].st;
+  return { stretch: pick, start: today, until: addDaysStr(today, ROTATION_DAYS), started: false };
+}
+
+function selectSessionStretches(sessionType, allStretches = STRETCHES, sessions = [], cap = STRETCH_SESSION_CAP, today = localDateStr()) {
+  const active = allStretches.filter((s) =&gt; s.active !== false);
+  // The anchors come every session, whatever kind of session it is.
+  const chosen = active.filter(isStretchAnchor).slice(0, cap);
+  const monthly = monthlyStretch(allStretches, sessions, today);
+  if (monthly &amp;&amp; chosen.length &lt; cap &amp;&amp; !chosen.some((s) =&gt; s.key === monthly.stretch.key)) chosen.push(monthly.stretch);
+  // Deliberately no filling of empty slots. If an area was dropped outright and
+  // nothing else covers it, the session is genuinely one stretch shorter —
+  // that is what &quot;Drop it&quot; says it does, and refilling it from the pool would
+  // make that untrue.
+  return orderStretches(chosen);
 }
 
 // Flexibility is the one goal that responds to frequency more than intensity —
@@ -1603,12 +1787,25 @@ function suggestStretchExpansion(sessions, activeStretches) {
   // fortnight later is how a routine quietly refills with the stretches that
   // were not working in the first place.
   const retiredKeys = new Set(activeStretches.filter((s) =&gt; s.retiredAt).map((s) =&gt; s.key));
+  // Only offer a region the routine does not already train. The bench holds two
+  // kinds of entry: stretches that fill a genuine gap, and simpler alternates
+  // for regions already covered, which exist so a retirement has somewhere to
+  // go. Without this filter the alternates get offered as additions, and within
+  // hours of shipping them that is exactly what happened — the routine picked
+  // up a second hip-flexor stretch and a second hamstring stretch, growing the
+  // pool in the one direction it was explicitly asked not to grow. A second
+  // stretch for a region already trained is not an expansion; it is a swap, and
+  // swaps belong to retireStretch.
+  const coveredRegions = new Set(
+    activeStretches.filter((s) =&gt; s.active !== false &amp;&amp; s.region).map((s) =&gt; s.region)
+  );
   const candidates = STRETCH_LIBRARY
     .filter((c) =&gt; !activeKeys.has(c.key) &amp;&amp; !retiredKeys.has(c.key))
+    .filter((c) =&gt; !c.region || !coveredRegions.has(c.region))
     .sort((a, b) =&gt; a.priority - b.priority);
 
   if (candidates.length === 0) {
-    return { ready: false, reason: &quot;The stretch routine covers every major area. Keep it consistent rather than adding more.&quot; };
+    return { ready: false, reason: &quot;The stretch routine covers every major area. Keep it consistent rather than adding more — if something in it is not working, swap or drop it in the log rather than adding alongside it.&quot; };
   }
 
   // Only expand the stretch routine once the current one is actually being
@@ -1683,6 +1880,12 @@ function getExerciseRecommendation(sessions, key, exercises) {
   const last = history[history.length - 1];
   const secondLast = history[history.length - 2];
   const lastReps = last.reps ?? repLow;
+  // Never recommend fewer reps than the target. A hold used to echo whatever was
+  // last logged, which meant a single short session became the new ceiling and
+  // stayed there: Single-Leg Press logged 6 against a target of 10 once, and
+  // every recommendation after that read 6. A short day is a short day, not a
+  // demotion. Struggling has its own branch below and resets to target anyway.
+  const holdReps = Math.max(repLow, lastReps);
 
   // Some movements do nothing at all below a certain load — an unloaded hip
   // thrust is the clearest case, where three sets of twelve is a warm-up rather
@@ -1711,15 +1914,32 @@ function getExerciseRecommendation(sessions, key, exercises) {
       const weight = last.weight + effectiveStep;
       return { weight, sets: cfg.targetSets, reps: repLow, action: &quot;weight-up&quot;, rationale: `Maxed reps at ${repHigh} — stepping up to ${weight}${cfg.unit} and resetting reps to ${repLow}.` };
     }
-    return { weight: last.weight, sets: cfg.targetSets, reps: lastReps, action: &quot;hold&quot;, rationale: &quot;Felt easy — one more session like this and it&#x27;s time to progress.&quot; };
+    return { weight: last.weight, sets: cfg.targetSets, reps: holdReps, action: &quot;hold&quot;, rationale: &quot;Felt easy — one more session like this and it&#x27;s time to progress.&quot; };
   }
 
   if (last.feel === &quot;solid&quot;) {
-    return { weight: last.weight, sets: cfg.targetSets, reps: lastReps, action: &quot;hold&quot;, rationale: &quot;Right in the working zone — repeat this to build consistency before pushing further.&quot; };
+    const stale = stagnantSessions(history, cfg);
+    if (stale &gt;= STAGNANT_LIMIT) {
+      // When the exercise is already sitting below its own target, the step is
+      // simply reaching the target — holdReps is that. Adding a rep on top
+      // would ask for three more than was actually being done, which is not a
+      // nudge. Only add the extra rep once target is genuinely being met.
+      const atTarget = lastReps &gt;= repLow;
+      const reps = atTarget ? Math.min(repHigh, holdReps + 1) : holdReps;
+      const why = atTarget
+        ? `adding one rep is the smallest honest step, and if that still reads solid next time the weight goes up regardless`
+        : `it has also been sitting under its own ${repLow}-rep target, so the step is just getting back to ${repLow}`;
+      return {
+        weight: last.weight, sets: cfg.targetSets, reps, action: &quot;nudge&quot;,
+        rationale: `${stale} sessions at ${last.weight}${cfg.unit} × ${lastReps} without it ever feeling easy. &quot;Solid&quot; every time is a stall rather than a plateau — ${why}.`,
+      };
+    }
+    return { weight: last.weight, sets: cfg.targetSets, reps: holdReps, action: &quot;hold&quot;, rationale: &quot;Right in the working zone — repeat this to build consistency before pushing further.&quot; };
   }
 
   // &quot;tough but completed&quot; or anything else non-struggled
   return { weight: last.weight, sets: cfg.targetSets, reps: Math.max(repLow, lastReps - 2), action: &quot;hold&quot;, rationale: &quot;Tough but completed — hold steady here rather than adding difficulty.&quot; };
+
 }
 
 // Thin wrapper kept for call sites that only need the weight number.
@@ -1731,6 +1951,24 @@ function suggestNextWeight(sessions, key, exercises) {
 // Flags an exercise as plateaued when weight AND reps have both sat still
 // across the last several logged sessions despite mixed/struggled results —
 // a sign that more of the same isn&#x27;t working and something should change.
+// How many sessions in a row an exercise has sat at the same weight and reps.
+// Deliberately blind to how it felt: the point is to notice standing still,
+// and &quot;solid&quot; every time for two months is standing still.
+const STAGNANT_LIMIT = 5;
+
+function stagnantSessions(history, cfg) {
+  if (!history.length) return 0;
+  const last = history[history.length - 1];
+  const w = last.weight, r = last.reps ?? cfg.targetReps;
+  let n = 0;
+  for (let i = history.length - 1; i &gt;= 0; i--) {
+    const h = history[i];
+    if (h.weight !== w || (h.reps ?? cfg.targetReps) !== r) break;
+    n++;
+  }
+  return n;
+}
+
 function checkPlateau(sessions, key, exercises) {
   const cfg = exercises[key];
   if (!cfg) return null;
@@ -1747,6 +1985,18 @@ function checkPlateau(sessions, key, exercises) {
   if (sameWeight &amp;&amp; sameReps &amp;&amp; anyStruggle) {
     return `${cfg.label} has sat at ${recent[0].weight}${cfg.unit} × ${recent[0].reps ?? cfg.targetReps} for 4 sessions with at least one struggle — consider a deload session at 80% for one week, or swapping in a different movement for 2 weeks before returning to it.`;
   }
+  // Standing still without struggling is the commoner failure and used to go
+  // entirely unreported, because the check above needs a bad session to fire.
+  // An exercise that is never hard enough to struggle at and never easy enough
+  // to progress from just quietly stops doing anything.
+  const stale = stagnantSessions(history, cfg);
+  if (stale &gt;= STAGNANT_LIMIT) {
+    const reps = recent[recent.length - 1].reps ?? cfg.targetReps;
+    const next = reps &lt; cfg.targetReps
+      ? `Get it back to its ${cfg.targetReps}-rep target first — it has been running under that.`
+      : `Add a rep, or add ${cfg.step || 5}${cfg.unit} and drop back to ${cfg.targetReps}.`;
+    return `${cfg.label} has not moved in ${stale} sessions — same weight, same reps, never a struggle. Nothing is wrong with it; it just is not asking for anything new. ${next}`;
+  }
   return null;
 }
 
@@ -1754,7 +2004,7 @@ function checkPlateau(sessions, key, exercises) {
 // from the last one. Anchoring on the last run means a single short day rewrites
 // the baseline and the next target reads as a demotion, when nothing about the
 // underlying fitness has changed. So: take the last several comparable runs,
-// anchor the distance on the best of them, and let the direction of pace and
+// anchor the distance on the median of them, and let the direction of pace and
 // heart rate across the window decide whether to push, hold or ease off. Runs
 // marked time-constrained are left out of this entirely — they are still
 // logged, they just don&#x27;t get a vote on what the baseline is.
@@ -1794,6 +2044,16 @@ function suggestCardioTarget(sessions, modality = &quot;treadmill&quot;) {
   // 1.5mi baseline.
   const history = (surfaceHistory.length &gt;= 2 ? surfaceHistory : groupHistory).slice(-CARDIO_WINDOW);
   if (modality === &quot;pool&quot; &amp;&amp; history.length &lt; 2) {
+    // One swim is thin, but it is not nothing: telling someone who just swam
+    // 700 to aim for 500 reads as a demotion for no reason.
+    const only = history[history.length - 1];
+    if (only &amp;&amp; only.distance) {
+      return {
+        distance: Math.round(only.distance / 25) * 25,
+        duration: Math.round(only.duration || 25),
+        rationale: `Only one swim logged so far — repeating it to see whether it settles before reading anything into the trend. Distance in yards.`,
+      };
+    }
     return { distance: 500, duration: 25, rationale: &quot;New modality — swim easy and find a baseline. Distance in yards.&quot; };
   }
   if (history.length &lt; 2) {
@@ -1866,6 +2126,53 @@ function suggestCardioTarget(sessions, modality = &quot;treadmill&quot;) {
   return { distance, duration: Math.round(distance * pace), rationale: `Settling in around your recent ${anchorLabel}${unit} across your last ${n} runs.${note}` };
 }
 
+// Distance the app governs; intensity it had no opinion about whatsoever. That
+// turned out to matter. Across twelve weeks of real logs every single run drifted
+// into the same hard band — average heart rate climbed from the 120s to the
+// 150s-160s while distance and duration also rose, which is volume and intensity
+// advancing together, the one combination the cardio target above exists to
+// prevent. It prevented it for distance and then the intensity came in through
+// the side door.
+//
+// This makes no claim about what any heart rate means. It compares recent runs
+// against the spread of his own recent runs and reports one thing: whether any
+// of them were easier than the rest. A programme with no easy days is a real
+// finding regardless of what the numbers are, and it bears directly on the
+// stress-reduction goal, which is not served by going hard three times a week.
+const INTENSITY_WINDOW = 20;
+const INTENSITY_RECENT = 6;
+// Easy running conventionally means roughly below 75% of maximum heart rate —
+// the pace a conversation is possible at. The reference here is the highest
+// heart rate his own log has ever recorded, not an age formula: it is his
+// number, it is observed rather than predicted, and because a true maximum is
+// almost certainly higher than anything reached in training, using the observed
+// peak sets a conservative line that under-reports rather than over-reports.
+//
+// A first version of this compared recent runs against a percentile of his own
+// recent runs, which was wrong: a percentile of a drifting distribution always
+// has something below it, so it could not detect the very thing it was for.
+const EASY_FRACTION = 0.75;
+
+function assessIntensity(sessions) {
+  const runs = sessions
+    .filter((s) =&gt; s.distance &amp;&amp; s.duration &amp;&amp; s.hrAvg &amp;&amp; cardioGroup(s.modality) === &quot;run&quot;)
+    .slice(-INTENSITY_WINDOW);
+  if (runs.length &lt; 10) return { flag: null, easyCount: null };
+
+  const peak = runs.reduce((m, s) =&gt; Math.max(m, s.hrMax || 0, s.hrAvg || 0), 0);
+  if (!peak) return { flag: null, easyCount: null };
+  const easyLine = Math.round(peak * EASY_FRACTION);
+
+  const recent = runs.slice(-INTENSITY_RECENT);
+  const easyCount = recent.filter((s) =&gt; s.hrAvg &lt;= easyLine).length;
+  if (easyCount &gt; 0) return { flag: null, easyCount, easyLine, peak };
+
+  return {
+    easyCount, easyLine, peak,
+    flag: `None of your last ${recent.length} runs were easy ones. Taking your own highest recorded heart rate (${peak}) as the reference, an easy run would average below about ${easyLine} — every recent run has been above it. Distance and pace are both still improving so nothing is going wrong, but the programme has no easy day in it, and that is usually the thing that runs out first. One run a week deliberately slow, at a pace you could talk through, costs almost nothing and is what most endurance plans are built around. It also serves the stress-reduction goal better than a third hard day does.`,
+  };
+}
+
 // Builds a plain-language weekly coaching summary tied to the user&#x27;s
 // stated goals, pulling together cardio targets, per-exercise directives,
 // and any plateau flags into one place.
@@ -1896,7 +2203,9 @@ function computeCoachSummary(sessions, exercises, plan, sessionType, allStretche
     cfg,
     rec: getStretchRecommendation(sessions, cfg),
   }));
-  return { directives, plateaus, cardio, readiness, rest, balance, stretches, stretchFreq, goals: plan.goals };
+  const intensity = assessIntensity(sessions);
+  const monthly = monthlyStretch(allStretches, sessions);
+  return { directives, plateaus, cardio, readiness, rest, balance, stretches, stretchFreq, intensity, monthly, goals: plan.goals };
 }
 
 function StepDots({ step, total }) {
@@ -2079,6 +2388,7 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
   });
 
   const sessionStretches = useMemo(() =&gt; selectSessionStretches(entry.type, stretches, sessions), [entry.type, stretches, sessions]);
+  const monthly = useMemo(() =&gt; monthlyStretch(stretches, sessions), [stretches, sessions]);
   const stretchPool = useMemo(() =&gt; stretchesForSession(entry.type, stretches), [entry.type, stretches]);
 
   const steps = isRun
@@ -2282,9 +2592,9 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
             fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;var(--activity)&quot;, lineHeight: 1.6,
             background: &quot;var(--activity-tint)&quot;, border: &quot;2px solid var(--activity)&quot;, borderRadius: 0, padding: &quot;10px 14px&quot;, marginBottom: 4,
           }}&gt;
-            Coach: rounds build toward roughly {STRETCH_TARGET_ACCUM}s total per muscle group — the point where added time stops paying off. Log the rounds you actually did. Mark one zero and two options appear: swap it for something simpler covering the same area, or drop it and make the routine shorter.
-            {stretchPool.length &gt; sessionStretches.length &amp;&amp; (
-              &lt;&gt; {&quot; &quot;}{sessionStretches.length} of your {stretchPool.length} tonight: hip flexors, hamstrings and calves every session, the rest rotating in by whichever is most overdue.&lt;/&gt;
+            Coach: rounds build toward roughly {STRETCH_TARGET_ACCUM}s total per muscle group — the point where added time stops paying off. Log the rounds you actually did. Mark one zero and two options appear: swap it for something simpler covering the same area, or drop it altogether.
+            {monthly &amp;&amp; sessionStretches.some((x) =&gt; x.key === monthly.stretch.key) &amp;&amp; (
+              &lt;&gt; {&quot; &quot;}The same three every session, plus {monthly.stretch.label} as this month&#x27;s fourth — it changes to a different area on {shortDate(monthly.until)}. Doing one for a month is how it gets familiar enough to do properly.&lt;/&gt;
             )}
           &lt;/div&gt;
           {retireNote &amp;&amp; (
@@ -2302,7 +2612,14 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
               return (
                 &lt;div key={s.key} style={{ borderTop: &quot;1px solid #D8D0BF&quot;, paddingTop: 10 }}&gt;
                   &lt;div style={{ display: &quot;flex&quot;, alignItems: &quot;baseline&quot;, justifyContent: &quot;space-between&quot;, gap: 8 }}&gt;
-                    &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 14, color: &quot;#1B1B1B&quot; }}&gt;{s.label}&lt;/div&gt;
+                    &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontWeight: 600, fontSize: 14, color: &quot;#1B1B1B&quot; }}&gt;
+                      {s.label}
+                      {monthly &amp;&amp; monthly.stretch.key === s.key &amp;&amp; (
+                        &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontWeight: 500, fontSize: 10.5, letterSpacing: 0.6, textTransform: &quot;uppercase&quot;, color: &quot;var(--activity)&quot;, marginLeft: 8 }}&gt;
+                          this month
+                        &lt;/span&gt;
+                      )}
+                    &lt;/div&gt;
                     &lt;div style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 12, color: &quot;var(--activity)&quot; }}&gt;
                       {s.holdSeconds}s{s.perSide ? &quot;/side&quot; : &quot;&quot;} × {rec.rounds}
                     &lt;/div&gt;
@@ -2326,11 +2643,7 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                         &lt;button
                           onClick={() =&gt; {
                             const res = onRetireStretch(s.key, { drop: false });
-                            setRetireNote(
-                              res &amp;&amp; res.replacement
-                                ? `${s.label} swapped for ${res.replacement.label}, from your next session.`
-                                : `${s.label} dropped. Nothing simpler covers that area, so the slot just closes.`
-                            );
+                            setRetireNote(retireNoteFor(s, res, false));
                           }}
                           style={{
                             padding: &quot;6px 10px&quot;, borderRadius: 0, fontSize: 11.5, cursor: &quot;pointer&quot;,
@@ -2342,8 +2655,8 @@ function LogWizard({ sessions, exercises, stretches = STRETCHES, initialDraft, o
                         &lt;/button&gt;
                         &lt;button
                           onClick={() =&gt; {
-                            onRetireStretch(s.key, { drop: true });
-                            setRetireNote(`${s.label} dropped. Your routine is one shorter — nothing replaces it.`);
+                            const res = onRetireStretch(s.key, { drop: true });
+                            setRetireNote(retireNoteFor(s, res, true));
                           }}
                           style={{
                             padding: &quot;6px 10px&quot;, borderRadius: 0, fontSize: 11.5, cursor: &quot;pointer&quot;,
@@ -3752,10 +4065,10 @@ function App() {
   // list it has just computed rather than reading state back, because the
   // wizard needs the replacement&#x27;s label in the same tick it taps the button.
   const handleRetireStretch = useCallback((key, options) =&gt; {
-    let outcome = { replacement: null };
+    let outcome = { replacement: null, heir: null, wasAnchor: false };
     setStretches((prev) =&gt; {
-      const { next, replacement } = retireStretch(prev, key, localDateStr(), options);
-      outcome = { replacement };
+      const { next, replacement, heir, wasAnchor } = retireStretch(prev, key, localDateStr(), options);
+      outcome = { replacement, heir, wasAnchor };
       saveStretches(next);
       return next;
     });
@@ -4135,7 +4448,7 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
 
       &lt;SilaBand sila={sila} setSila={setSila} /&gt;
 
-      {(coach.rest.flag || coach.stretchFreq.flag || coach.balance.flag) &amp;&amp; (
+      {(coach.rest.flag || coach.stretchFreq.flag || coach.balance.flag || (coach.intensity &amp;&amp; coach.intensity.flag)) &amp;&amp; (
         &lt;div style={{ background: &quot;#E5EDE4&quot;, border: &quot;2px solid #2F6B4F&quot;, borderRadius: 0, padding: 20 }}&gt;
           &lt;div style={{ fontFamily: &quot;&#x27;Archivo&#x27;, sans-serif&quot;, fontSize: 15, fontWeight: 700, letterSpacing: 0.4, textTransform: &quot;uppercase&quot;, color: &quot;#2F6B4F&quot;, marginBottom: 6 }}&gt;Recovery &amp;amp; mobility&lt;/div&gt;
           &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 8 }}&gt;
@@ -4147,6 +4460,9 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
             )}
             {coach.balance.flag &amp;&amp; (
               &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;{coach.balance.flag}&lt;/div&gt;
+            )}
+            {coach.intensity &amp;&amp; coach.intensity.flag &amp;&amp; (
+              &lt;div style={{ fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12.5, color: &quot;#1B1B1B&quot;, lineHeight: 1.6 }}&gt;{coach.intensity.flag}&lt;/div&gt;
             )}
           &lt;/div&gt;
         &lt;/div&gt;
@@ -4180,7 +4496,14 @@ function TodayTab({ sessions, plan, exercises, setExercises, stretches = STRETCH
             &lt;div style={{ display: &quot;flex&quot;, flexDirection: &quot;column&quot;, gap: 4 }}&gt;
               {coach.stretches.map((s) =&gt; (
                 &lt;div key={s.key} style={{ display: &quot;flex&quot;, justifyContent: &quot;space-between&quot;, fontFamily: &quot;&#x27;Inter&#x27;, sans-serif&quot;, fontSize: 12, color: &quot;#6E6759&quot; }}&gt;
-                  &lt;span&gt;{s.label}&lt;/span&gt;
+                  &lt;span&gt;
+                    {s.label}
+                    {coach.monthly &amp;&amp; coach.monthly.stretch.key === s.key &amp;&amp; (
+                      &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, fontSize: 10, letterSpacing: 0.5, textTransform: &quot;uppercase&quot;, color: &quot;var(--activity)&quot;, marginLeft: 6 }}&gt;
+                        this month · changes {shortDate(coach.monthly.until)}
+                      &lt;/span&gt;
+                    )}
+                  &lt;/span&gt;
                   &lt;span style={{ fontFamily: &quot;&#x27;IBM Plex Mono&#x27;, monospace&quot;, color: &quot;var(--activity)&quot; }}&gt;
                     {s.cfg.holdSeconds}s{s.cfg.perSide ? &quot;/side&quot; : &quot;&quot;} × {s.rec.rounds}
                   &lt;/span&gt;
